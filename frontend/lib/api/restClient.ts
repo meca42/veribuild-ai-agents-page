@@ -537,6 +537,79 @@ const mapStep = (data: any): API.Step => {
   };
 };
 
+const mapDrawing = (data: any): API.Drawing => {
+  const supabase = createBrowserClient();
+  
+  const versions = (data.versions || []).map((v: any) => {
+    let url = '';
+    if (supabase && v.file?.bucket && v.file?.path) {
+      const { data: urlData } = supabase.storage.from(v.file.bucket).getPublicUrl(v.file.path);
+      url = urlData.publicUrl;
+    }
+    
+    return {
+      id: v.id,
+      version: v.version,
+      revision: v.revision || 'A',
+      fileId: v.file?.id || '',
+      fileName: v.file?.path?.split('/').pop() || '',
+      uploadedBy: v.file?.uploaded_by || 'Unknown',
+      uploadedAt: new Date(v.file?.uploaded_at || v.created_at),
+      notes: v.notes,
+      url,
+    };
+  });
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    number: data.number,
+    title: data.title,
+    discipline: data.discipline,
+    status: 'draft',
+    currentVersion: data.current_version,
+    currentRevision: versions[0]?.revision || 'A',
+    versions,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  };
+};
+
+const mapDocument = (data: any): API.Document => {
+  const supabase = createBrowserClient();
+  
+  const versions = (data.versions || []).map((v: any) => {
+    let url = '';
+    if (supabase && v.file?.bucket && v.file?.path) {
+      const { data: urlData } = supabase.storage.from(v.file.bucket).getPublicUrl(v.file.path);
+      url = urlData.publicUrl;
+    }
+    
+    return {
+      id: v.id,
+      version: v.version,
+      fileId: v.file?.id || '',
+      fileName: v.file?.path?.split('/').pop() || '',
+      uploadedBy: v.file?.uploaded_by || v.submitted_by || 'Unknown',
+      uploadedAt: new Date(v.file?.uploaded_at || v.created_at),
+      notes: v.notes,
+      url,
+    };
+  });
+
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    title: data.title,
+    type: data.kind,
+    status: data.versions?.[0]?.status || 'draft',
+    currentVersion: data.current_version,
+    versions,
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  };
+};
+
 const mapFile = (data: any): API.File => {
   const supabase = createBrowserClient();
   let url = data.url;
@@ -564,35 +637,361 @@ const mapFile = (data: any): API.File => {
 };
 
 export const listDrawings = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Drawing>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('drawings')
+    .select(`
+      *,
+      versions:drawing_versions(
+        id,
+        version,
+        revision,
+        issued_for,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes, uploaded_at)
+      )
+    `, { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (params.q) {
+    query = query.or(`number.ilike.%${params.q}%,title.ilike.%${params.q}%`);
+  }
+
+  if (params.discipline) {
+    query = query.eq('discipline', params.discipline);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapDrawing),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
 };
 
 export const getDrawing = async (id: string): Promise<API.Drawing> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('drawings')
+    .select(`
+      *,
+      versions:drawing_versions(
+        id,
+        version,
+        revision,
+        issued_for,
+        notes,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes, uploaded_at, uploaded_by)
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapDrawing(data);
 };
 
 export const createDrawing = async (projectId: string, data: Partial<API.Drawing>): Promise<API.Drawing> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data: drawing, error } = await supabase
+    .from('drawings')
+    .insert({
+      project_id: projectId,
+      discipline: data.discipline || 'General',
+      number: data.number || `DWG-${Date.now()}`,
+      title: data.title || 'Untitled Drawing',
+      tags: data.tags || [],
+      current_version: 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDrawing({ ...drawing, versions: [] });
 };
 
-export const addDrawingVersion = async (drawingId: string, fileId: string, fileName: string, notes?: string): Promise<API.Drawing> => {
-  throw new Error('Not implemented - use mock client');
+export const addDrawingVersion = async (
+  drawingId: string,
+  file: File,
+  revision?: string,
+  issuedFor?: string,
+  notes?: string
+): Promise<API.Drawing> => {
+  const supabase = getSupabase();
+  
+  const { data: drawing } = await supabase
+    .from('drawings')
+    .select('project_id, current_version')
+    .eq('id', drawingId)
+    .single();
+
+  if (!drawing) throw new Error('Drawing not found');
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('org_id')
+    .eq('id', drawing.project_id)
+    .single();
+
+  if (!project) throw new Error('Project not found');
+
+  if (file.type !== 'application/pdf') {
+    throw new Error('Only PDF files are allowed');
+  }
+
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('File size must be less than 50MB');
+  }
+
+  const bucket = 'drawings';
+  const fileName = `${project.org_id}/${drawing.project_id}/${crypto.randomUUID()}.pdf`;
+  
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  try {
+    const { data: fileRecord, error: fileError } = await supabase
+      .from('files')
+      .insert({
+        org_id: project.org_id,
+        project_id: drawing.project_id,
+        bucket,
+        path: fileName,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (fileError) throw fileError;
+
+    const newVersion = drawing.current_version + 1;
+
+    const { error: versionError } = await supabase
+      .from('drawing_versions')
+      .insert({
+        drawing_id: drawingId,
+        version: newVersion,
+        file_id: fileRecord.id,
+        revision,
+        issued_for: issuedFor,
+        notes,
+      });
+
+    if (versionError) throw versionError;
+
+    const { error: updateError } = await supabase
+      .from('drawings')
+      .update({ current_version: newVersion })
+      .eq('id', drawingId);
+
+    if (updateError) throw updateError;
+
+    return await getDrawing(drawingId);
+  } catch (error) {
+    await supabase.storage.from(bucket).remove([fileName]);
+    throw error;
+  }
 };
 
 export const listDocuments = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Document>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('documents')
+    .select(`
+      *,
+      versions:document_versions(
+        id,
+        version,
+        status,
+        submitted_by,
+        reviewed_by,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes, uploaded_at)
+      )
+    `, { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (params.q) {
+    query = query.ilike('title', `%${params.q}%`);
+  }
+
+  if (params.type) {
+    query = query.eq('kind', params.type);
+  }
+
+  if (params.status) {
+    query = query.contains('versions', [{ status: params.status }]);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapDocument),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
 };
 
 export const getDocument = async (id: string): Promise<API.Document> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('documents')
+    .select(`
+      *,
+      versions:document_versions(
+        id,
+        version,
+        status,
+        submitted_by,
+        reviewed_by,
+        notes,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes, uploaded_at, uploaded_by)
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapDocument(data);
 };
 
 export const createDocument = async (projectId: string, data: Partial<API.Document>): Promise<API.Document> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data: document, error } = await supabase
+    .from('documents')
+    .insert({
+      project_id: projectId,
+      kind: data.type || 'other',
+      title: data.title || 'Untitled Document',
+      tags: data.tags || [],
+      current_version: 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDocument({ ...document, versions: [] });
 };
 
-export const addDocumentVersion = async (documentId: string, fileId: string, fileName: string, notes?: string): Promise<API.Document> => {
-  throw new Error('Not implemented - use mock client');
+export const addDocumentVersion = async (
+  documentId: string,
+  file: File,
+  status?: string,
+  submittedBy?: string,
+  reviewedBy?: string,
+  notes?: string
+): Promise<API.Document> => {
+  const supabase = getSupabase();
+  
+  const { data: document } = await supabase
+    .from('documents')
+    .select('project_id, current_version')
+    .eq('id', documentId)
+    .single();
+
+  if (!document) throw new Error('Document not found');
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('org_id')
+    .eq('id', document.project_id)
+    .single();
+
+  if (!project) throw new Error('Project not found');
+
+  if (file.type !== 'application/pdf') {
+    throw new Error('Only PDF files are allowed');
+  }
+
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('File size must be less than 50MB');
+  }
+
+  const bucket = 'documents';
+  const fileName = `${project.org_id}/${document.project_id}/${crypto.randomUUID()}.pdf`;
+  
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  try {
+    const { data: fileRecord, error: fileError } = await supabase
+      .from('files')
+      .insert({
+        org_id: project.org_id,
+        project_id: document.project_id,
+        bucket,
+        path: fileName,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (fileError) throw fileError;
+
+    const newVersion = document.current_version + 1;
+    const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+
+    const { error: versionError } = await supabase
+      .from('document_versions')
+      .insert({
+        document_id: documentId,
+        version: newVersion,
+        file_id: fileRecord.id,
+        status: status || 'draft',
+        submitted_by: submittedBy || currentUserId,
+        reviewed_by: reviewedBy,
+        notes,
+      });
+
+    if (versionError) throw versionError;
+
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update({ current_version: newVersion })
+      .eq('id', documentId);
+
+    if (updateError) throw updateError;
+
+    return await getDocument(documentId);
+  } catch (error) {
+    await supabase.storage.from(bucket).remove([fileName]);
+    throw error;
+  }
 };
 
 export const listRFIs = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.RFI>> => {
@@ -717,4 +1116,56 @@ export const updateWebhook = async (id: string, data: Partial<API.Webhook>): Pro
 
 export const deleteWebhook = async (id: string): Promise<void> => {
   throw new Error('Not implemented - use mock client');
+};
+
+export const linkStepReference = async (params: {
+  stepId: string;
+  refType: 'drawing' | 'document';
+  drawingId?: string;
+  documentId?: string;
+  drawingVersion?: number;
+  documentVersion?: number;
+}): Promise<void> => {
+  const supabase = getSupabase();
+  
+  const { error } = await supabase
+    .from('step_references')
+    .insert({
+      step_id: params.stepId,
+      ref_type: params.refType,
+      drawing_id: params.drawingId,
+      document_id: params.documentId,
+      drawing_version: params.drawingVersion,
+      document_version: params.documentVersion,
+    });
+
+  if (error) throw error;
+};
+
+export const unlinkStepReference = async (stepReferenceId: string): Promise<void> => {
+  const supabase = getSupabase();
+  
+  const { error } = await supabase
+    .from('step_references')
+    .delete()
+    .eq('id', stepReferenceId);
+
+  if (error) throw error;
+};
+
+export const getStepReferences = async (stepId: string): Promise<any[]> => {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('step_references')
+    .select(`
+      *,
+      drawing:drawings(id, number, title, discipline),
+      document:documents(id, title, kind)
+    `)
+    .eq('step_id', stepId);
+
+  if (error) throw error;
+  
+  return data || [];
 };

@@ -105,6 +105,7 @@ export interface Drawing {
   currentVersion: number;
   currentRevision: string;
   versions: DrawingVersion[];
+  tags?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +128,7 @@ export interface Document {
   status: DocumentStatus;
   currentVersion: number;
   versions: DocumentVersion[];
+  tags?: string[];
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,7 +1,7 @@
 # Supabase Live CRUD Setup Guide
 
 ## Overview
-This guide walks through enabling live CRUD for Projects → Phases → Steps (with checklists) and Files using Supabase.
+This guide walks through enabling live CRUD for Projects → Phases → Steps (with checklists), Drawings, Documents (with versioning), and Files using Supabase.
 
 ## Prerequisites
 - Supabase project created
@@ -28,7 +28,7 @@ Run these migrations in Supabase Dashboard → SQL Editor in order:
 -- Creates: Additional project-related tables
 ```
 
-### 3. Core Workflow Tables (NEW)
+### 3. Core Workflow Tables
 ```sql
 -- Run: supabase/migrations/003_core_workflow.sql
 -- Creates:
@@ -39,11 +39,23 @@ Run these migrations in Supabase Dashboard → SQL Editor in order:
 -- Includes: RLS policies, indexes, helper functions
 ```
 
-### 4. Storage Buckets (NEW)
+### 4. Storage Buckets
 ```sql
 -- Run: supabase/migrations/004_storage_buckets.sql
 -- Creates buckets: drawings, documents, receipts, artifacts
 -- Includes: RLS policies for org-based access control
+```
+
+### 5. Drawings and Documents (NEW)
+```sql
+-- Run: supabase/migrations/005_drawings_docs.sql
+-- Creates:
+--   - drawings (with discipline, number, title)
+--   - drawing_versions (with file_id, revision, issued_for)
+--   - documents (with kind, title)
+--   - document_versions (with file_id, status, submitted_by, reviewed_by)
+--   - step_references (links steps to drawings/documents)
+-- Includes: RLS policies, versioning support, step linking
 ```
 
 ## Step 2: Seed Demo Data (Optional)
@@ -108,7 +120,33 @@ The app will automatically use Supabase instead of mock data.
    - [ ] File is accessible via signed URL
    - [ ] Files are scoped to organization
 
-5. **RLS Verification**
+5. **Drawings with Versioning** (NEW)
+   - [ ] Navigate to `/drawings`
+   - [ ] Create a new drawing (discipline, number, title)
+   - [ ] Add first version (upload PDF)
+   - [ ] Add second version with revision notes
+   - [ ] Current version shows latest
+   - [ ] All versions are accessible via signed URLs
+   - [ ] Filter by discipline
+
+6. **Documents with Versioning** (NEW)
+   - [ ] Navigate to `/documents`
+   - [ ] Create a new document (kind, title)
+   - [ ] Add version with status 'draft'
+   - [ ] Add version with status 'approved'
+   - [ ] Current version reflects latest status
+   - [ ] Filter by kind and status
+
+7. **Step References** (NEW)
+   - [ ] Open a step detail page
+   - [ ] Navigate to "References" tab
+   - [ ] Attach a specific drawing version
+   - [ ] Attach a specific document version
+   - [ ] References appear as chips with open/unlink actions
+   - [ ] Clicking reference opens signed URL
+   - [ ] Unlink removes reference
+
+8. **RLS Verification**
    - [ ] Create a second user account
    - [ ] Second user creates their own org
    - [ ] Second user cannot see first user's projects/data
@@ -142,6 +180,42 @@ The app will automatically use Supabase instead of mock data.
 - References Supabase Storage via `bucket` and `path`
 - Stores metadata: mime_type, size_bytes, sha256
 - Tracks uploader and upload timestamp
+
+**drawings** (NEW)
+- Links to `projects.id` via `project_id`
+- Unique constraint on `(project_id, number)`
+- Tracks `current_version` (bumped on new version)
+- Supports `discipline` (Structural, Architectural, MEP, etc.)
+- Tags array for categorization
+
+**drawing_versions** (NEW)
+- Links to `drawings.id` via `drawing_id`
+- Links to `files.id` via `file_id` (PDF in Storage)
+- Unique constraint on `(drawing_id, version)`
+- Tracks `revision` (A, B, C, etc.)
+- Supports `issued_for` (Construction, Review, etc.)
+- Optional notes
+
+**documents** (NEW)
+- Links to `projects.id` via `project_id`
+- `kind` enum: spec, procedure, manual, rfi, submittal, other
+- Tracks `current_version`
+- Tags array for categorization
+
+**document_versions** (NEW)
+- Links to `documents.id` via `document_id`
+- Links to `files.id` via `file_id` (PDF in Storage)
+- Unique constraint on `(document_id, version)`
+- `status` enum: draft, submitted, approved, rejected
+- Tracks `submitted_by` and `reviewed_by` (user IDs)
+- Optional notes
+
+**step_references** (NEW)
+- Links steps to drawings or documents
+- `ref_type` enum: 'drawing' or 'document'
+- Can reference specific versions via `drawing_version`/`document_version`
+- Enables "attach reference to step" workflow
+- Unique constraint prevents duplicate references
 
 ### Storage Buckets
 
@@ -247,11 +321,99 @@ All CRUD operations available via `import { api } from '@/lib/api'`:
 - `api.getFile(id)` - Single file metadata
 - `api.uploadFiles(orgId, projectId, files)` - Upload to Storage
 
+### Drawings (NEW)
+- `api.listDrawings(projectId, params)` - Paginated with filters (q, discipline)
+- `api.getDrawing(drawingId)` - Single drawing with all versions
+- `api.createDrawing(projectId, data)` - Create drawing (no file yet)
+- `api.addDrawingVersion(drawingId, file, revision?, issuedFor?, notes?)` - Upload PDF + create version
+
+### Documents (NEW)
+- `api.listDocuments(projectId, params)` - Paginated with filters (q, kind, status)
+- `api.getDocument(documentId)` - Single document with all versions
+- `api.createDocument(projectId, data)` - Create document (no file yet)
+- `api.addDocumentVersion(documentId, file, status?, submittedBy?, reviewedBy?, notes?)` - Upload PDF + create version
+
+### Step References (NEW)
+- `api.linkStepReference({ stepId, refType, drawingId?, documentId?, drawingVersion?, documentVersion? })` - Link drawing/document to step
+- `api.unlinkStepReference(stepReferenceId)` - Remove reference
+- `api.getStepReferences(stepId)` - Get all references for a step
+
 ## Next Steps
 
-1. Implement remaining entities (Drawings, Documents, RFIs, etc.)
-2. Add real-time subscriptions for collaborative editing
-3. Implement file versioning
-4. Add audit logging for sensitive operations
-5. Set up automated backups
-6. Configure monitoring and alerting
+1. Implement UI pages for Drawings and Documents
+2. Add References tab to Step detail page
+3. Add real-time subscriptions for collaborative editing
+4. Implement additional document types (RFIs, Submittals)
+5. Add audit logging for sensitive operations
+6. Set up automated backups
+7. Configure monitoring and alerting
+
+## How to Attach References to a Step (NEW)
+
+### Via API
+
+```typescript
+import { api } from '@/lib/api';
+
+// Link a specific drawing version to a step
+await api.linkStepReference({
+  stepId: 'step-uuid',
+  refType: 'drawing',
+  drawingId: 'drawing-uuid',
+  drawingVersion: 2, // Optional: link to specific version
+});
+
+// Link a document to a step
+await api.linkStepReference({
+  stepId: 'step-uuid',
+  refType: 'document',
+  documentId: 'document-uuid',
+  documentVersion: 1,
+});
+
+// Get all references for a step
+const references = await api.getStepReferences('step-uuid');
+
+// Unlink a reference
+await api.unlinkStepReference('reference-uuid');
+```
+
+### Workflow
+
+1. **Create Drawing/Document**: First create the drawing or document record
+2. **Add Version**: Upload a PDF file to create the first version
+3. **Link to Step**: From the step detail page, attach the drawing/document
+4. **Access Reference**: Click the reference to open the signed URL
+
+### Versioning Strategy
+
+**Drawings**:
+- Each upload creates a new `drawing_version`
+- `current_version` is bumped automatically
+- Reference can link to specific version or "latest"
+- Revision letters (A, B, C) track minor changes
+
+**Documents**:
+- Each upload creates a new `document_version`
+- Status workflow: draft → submitted → approved/rejected
+- Can track `submitted_by` and `reviewed_by`
+- Current status comes from latest version
+
+### File Type Validation
+
+- **Only PDFs allowed** (enforced in `addDrawingVersion` and `addDocumentVersion`)
+- **Max file size: 50MB** (configurable)
+- Files uploaded to org-scoped paths: `{org_id}/{project_id}/{uuid}.pdf`
+- On upload failure, partial inserts are cleaned up
+
+### Storage Path Format
+
+```
+drawings/{org_id}/{project_id}/{uuid}.pdf
+documents/{org_id}/{project_id}/{uuid}.pdf
+```
+
+This ensures:
+- Org-based access control via RLS
+- No filename conflicts
+- Easy cleanup when projects are deleted
