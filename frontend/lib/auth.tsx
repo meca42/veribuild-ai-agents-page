@@ -23,6 +23,7 @@ interface AuthContextType {
   currentOrgId: string | null;
   currentOrgRole: string | null;
   organizations: OrgMember[];
+  hasLoadedOrgs: boolean;
   setCurrentOrgId: (orgId: string) => void;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<{ name?: string; avatar_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [organizations, setOrganizations] = useState<OrgMember[]>([]);
+  const [hasLoadedOrgs, setHasLoadedOrgs] = useState(false);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
 
   const supabase = USE_MOCK_API ? null : createBrowserClient();
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!members || members.length === 0) {
         console.log('[Auth] No org memberships found');
         setOrganizations([]);
+        setHasLoadedOrgs(true);
         return;
       }
 
@@ -116,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('[Auth] Formatted orgs:', formattedOrgs);
       setOrganizations(formattedOrgs as OrgMember[]);
+      setHasLoadedOrgs(true);
       
       const savedOrgId = localStorage.getItem('currentOrgId');
       if (savedOrgId && formattedOrgs.some((m: any) => m.org_id === savedOrgId)) {
@@ -127,7 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Orgs loaded successfully:', formattedOrgs.length);
     } catch (error) {
       console.error('[Auth] Exception loading orgs:', error);
-      // Don't let this block the app - set empty orgs
+      // Mark as loaded even on error, but keep orgs as empty
+      // This prevents infinite redirect loops when queries fail
+      setHasLoadedOrgs(true);
       setOrganizations([]);
     }
   };
@@ -216,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user);
+        setHasLoadedOrgs(false);
         await Promise.all([
           loadUserOrgs(session.user.id),
           loadUserProfile(session.user.id)
@@ -224,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setUserProfile(null);
         setOrganizations([]);
+        setHasLoadedOrgs(false);
         setCurrentOrgId(null);
       }
     });
@@ -281,6 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentOrgId,
         currentOrgRole,
         organizations,
+        hasLoadedOrgs,
         setCurrentOrgId,
         login,
         loginWithGoogle,

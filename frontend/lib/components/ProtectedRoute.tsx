@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRouteProps) => {
-  const { isAuthenticated, isLoading, currentOrgId, organizations } = useAuth();
+  const { isAuthenticated, isLoading, currentOrgId, organizations, hasLoadedOrgs } = useAuth();
   const location = useLocation();
 
   console.log('[ProtectedRoute]', { 
@@ -20,6 +20,7 @@ export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRoutePr
     requireOrg, 
     currentOrgId, 
     orgsCount: organizations.length,
+    hasLoadedOrgs,
     path: location.pathname 
   });
 
@@ -45,14 +46,28 @@ export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRoutePr
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  if (requireOrg && organizations.length === 0) {
+  // Only check for orgs if we've actually tried to load them
+  if (requireOrg && hasLoadedOrgs && organizations.length === 0) {
     console.log('[ProtectedRoute] No orgs - redirecting to create org');
     return <Navigate to="/onboarding/create-org" replace />;
   }
 
-  if (requireOrg && !currentOrgId && organizations.length > 0) {
+  if (requireOrg && hasLoadedOrgs && !currentOrgId && organizations.length > 0) {
     console.log('[ProtectedRoute] Has orgs but none selected - redirecting to select org');
     return <Navigate to="/onboarding/select-org" replace />;
+  }
+
+  // If we haven't loaded orgs yet but user is authenticated, show loading
+  if (requireOrg && !hasLoadedOrgs) {
+    console.log('[ProtectedRoute] Still loading orgs - showing loading state');
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-neutral-600 dark:text-neutral-400">Loading organizations...</p>
+        </div>
+      </div>
+    );
   }
 
   console.log('[ProtectedRoute] All checks passed - rendering children');
