@@ -56,8 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
           org:orgs!inner (
             id,
-            name,
-            avatar_url
+            name
           )
         `)
         .eq('user_id', userId);
