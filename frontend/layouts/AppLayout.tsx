@@ -1,5 +1,5 @@
-import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { Outlet, Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select } from "@/components/ui/Select";
 import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+import type * as API from "@/lib/api/types";
 
 const navigation = [
   { name: "Projects", href: "/projects", icon: FolderKanban },
@@ -52,13 +54,44 @@ const navigation = [
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [projects, setProjects] = useState<API.Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const { user, userProfile, organizations, currentOrgId, setCurrentOrgId, logout } = useAuth();
 
   const currentOrg = organizations.find(o => o.org_id === currentOrgId);
   const userInitials = userProfile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 
                        user?.email?.substring(0, 2).toUpperCase() || 'U';
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!currentOrgId) return;
+      
+      try {
+        const response = await api.listProjects(currentOrgId, { pageSize: 100 });
+        setProjects(response.data);
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      }
+    };
+
+    loadProjects();
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (id) {
+      setCurrentProjectId(id);
+    } else {
+      setCurrentProjectId(null);
+    }
+  }, [id]);
+
+  const handleProjectChange = (projectId: string) => {
+    setCurrentProjectId(projectId);
+    navigate(`/projects/${projectId}`);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -183,6 +216,20 @@ export default function AppLayout() {
                 {organizations.map((org) => (
                   <option key={org.org_id} value={org.org_id}>
                     {org.org.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+
+            {projects.length > 0 && currentProjectId && (
+              <Select 
+                value={currentProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                className="w-48 hidden sm:flex"
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
                   </option>
                 ))}
               </Select>
