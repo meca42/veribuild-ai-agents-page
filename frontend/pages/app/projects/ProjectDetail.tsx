@@ -1,33 +1,36 @@
 import { useParams, Link } from "react-router-dom";
 import { Calendar, MapPin, User, FileText, Package, MessageSquare } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import PageHeader from "@/components/app/PageHeader";
-import { useProject } from "@/lib/mocks/projects";
+import { useProject } from "@/lib/hooks";
 
-const statusColors = {
-  planning: "bg-blue-100 text-blue-800",
-  active: "bg-green-100 text-green-800",
-  "on-hold": "bg-yellow-100 text-yellow-800",
-  completed: "bg-gray-100 text-gray-800",
+const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
+  planning: "info",
+  active: "success",
+  on_hold: "warning",
+  completed: "neutral",
+  archived: "neutral",
 };
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data: project, isLoading, error } = useProject(id!);
+  const { data: project, isLoading, isError, error } = useProject(id!);
 
   if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center text-[var(--vb-neutral-600)]">Loading...</div>
+        <div className="text-center text-neutral-600 dark:text-neutral-400">Loading...</div>
       </div>
     );
   }
 
-  if (error || !project) {
+  if (isError || !project) {
     return (
       <div className="p-6">
-        <div className="text-center text-red-600">Project not found</div>
+        <div className="text-center text-red-600 dark:text-red-400">
+          {error?.message || 'Project not found'}
+        </div>
       </div>
     );
   }
@@ -43,48 +46,48 @@ export default function ProjectDetail() {
         ]}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline">Edit Project</Button>
-            <Button className="bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
-              Settings
-            </Button>
+            <Button variant="secondary">Edit Project</Button>
+            <Button variant="primary">Settings</Button>
           </div>
         }
       />
 
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-lg border border-neutral-200">
+          <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-neutral-600">Status</span>
-              <Badge className={statusColors[project.status]}>
-                {project.status.replace("-", " ")}
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Status</span>
+              <Badge variant={statusColors[project.status] || 'neutral'}>
+                {project.status.replace(/_/g, " ")}
               </Badge>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg border border-neutral-200">
+          <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center gap-3 mb-2">
               <MapPin size={20} className="text-neutral-400" />
-              <span className="text-sm font-medium text-neutral-600">Location</span>
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Location</span>
             </div>
-            <p className="text-lg font-semibold text-neutral-900">{project.location}</p>
+            <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{project.location || '—'}</p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg border border-neutral-200">
-            <div className="flex items-center gap-3 mb-2">
-              <User size={20} className="text-neutral-400" />
-              <span className="text-sm font-medium text-neutral-600">Owner</span>
-            </div>
-            <p className="text-lg font-semibold text-neutral-900">{project.owner}</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg border border-neutral-200">
+          <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center gap-3 mb-2">
               <Calendar size={20} className="text-neutral-400" />
-              <span className="text-sm font-medium text-neutral-600">Timeline</span>
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Budget</span>
             </div>
-            <p className="text-sm text-neutral-900">
-              {new Date(project.startDate).toLocaleDateString()}
+            <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+              {project.budget ? `$${project.budget.toLocaleString()}` : '—'}
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700">
+            <div className="flex items-center gap-3 mb-2">
+              <Calendar size={20} className="text-neutral-400" />
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Timeline</span>
+            </div>
+            <p className="text-sm text-neutral-900 dark:text-neutral-100">
+              {project.startDate ? new Date(project.startDate).toLocaleDateString() : '—'}
               {project.endDate && ` - ${new Date(project.endDate).toLocaleDateString()}`}
             </p>
           </div>
@@ -93,7 +96,7 @@ export default function ProjectDetail() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             to={`/projects/${id}/phases`}
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -108,75 +111,75 @@ export default function ProjectDetail() {
 
           <Link
             to={`/projects/${id}/steps`}
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <Package size={20} className="text-green-600" />
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                <Package size={20} className="text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-lg font-semibold text-neutral-900">Steps</h3>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Steps</h3>
             </div>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Track detailed execution steps and checklists
             </p>
           </Link>
 
           <Link
             to="/drawings"
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileText size={20} className="text-purple-600" />
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                <FileText size={20} className="text-purple-600 dark:text-purple-400" />
               </div>
-              <h3 className="text-lg font-semibold text-neutral-900">Drawings</h3>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Drawings</h3>
             </div>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Access project drawings and specifications
             </p>
           </Link>
 
           <Link
             to="/materials"
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Package size={20} className="text-orange-600" />
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center">
+                <Package size={20} className="text-orange-600 dark:text-orange-400" />
               </div>
-              <h3 className="text-lg font-semibold text-neutral-900">Materials</h3>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Materials</h3>
             </div>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Manage BOM, deliveries, and inventory
             </p>
           </Link>
 
           <Link
             to="/rfi"
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <MessageSquare size={20} className="text-yellow-600" />
+              <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex items-center justify-center">
+                <MessageSquare size={20} className="text-yellow-600 dark:text-yellow-400" />
               </div>
-              <h3 className="text-lg font-semibold text-neutral-900">RFIs</h3>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">RFIs</h3>
             </div>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Submit and track requests for information
             </p>
           </Link>
 
           <Link
             to="/issues"
-            className="bg-white p-6 rounded-lg border border-neutral-200 hover:border-[var(--vb-primary)] transition-colors"
+            className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                <MessageSquare size={20} className="text-red-600" />
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center">
+                <MessageSquare size={20} className="text-red-600 dark:text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-neutral-900">Issues</h3>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Issues</h3>
             </div>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Track and resolve project issues
             </p>
           </Link>
