@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
+import CreateProjectModal, { type ProjectFormData } from "@/components/app/CreateProjectModal";
 import { useProjects } from "@/lib/hooks";
 import { useToast } from "@/components/ui/Toast";
 import { useAuth } from "@/lib/auth";
@@ -24,6 +25,7 @@ export default function ProjectsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   
   const navigate = useNavigate();
@@ -38,7 +40,7 @@ export default function ProjectsList() {
 
   const { addToast } = useToast();
 
-  const handleCreateProject = async () => {
+  const handleCreateProject = async (formData: ProjectFormData) => {
     if (!currentOrgId) {
       addToast('No organization selected', 'error');
       return;
@@ -46,11 +48,9 @@ export default function ProjectsList() {
 
     setIsCreating(true);
     try {
-      const project = await api.createProject(currentOrgId, {
-        name: 'New Project',
-        status: 'planning',
-      });
+      const project = await api.createProject(currentOrgId, formData);
       addToast('Project created successfully', 'success');
+      setIsModalOpen(false);
       await refetch();
       navigate(`/projects/${project.id}`);
     } catch (err: any) {
@@ -82,11 +82,18 @@ export default function ProjectsList() {
         title="Projects"
         description="Manage your construction projects"
         actions={
-          <Button variant="primary" onClick={handleCreateProject} disabled={isCreating}>
+          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
             <Plus className="h-5 w-5" />
-            {isCreating ? 'Creating...' : 'New Project'}
+            New Project
           </Button>
         }
+      />
+
+      <CreateProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateProject}
+        isLoading={isCreating}
       />
 
       <div className="p-6">
@@ -170,7 +177,7 @@ export default function ProjectsList() {
             title="No projects found"
             description="No projects match your search criteria. Try adjusting your filters or create a new project."
             actionLabel="Create Project"
-            onAction={handleCreateProject}
+            onAction={() => setIsModalOpen(true)}
           />
         )}
 
