@@ -1004,8 +1004,8 @@ const mapRFI = (data: any): API.RFI => ({
   question: data.question,
   answer: data.answer,
   status: data.status,
-  askedBy: data.asked_by,
-  assignedTo: data.assigned_to,
+  askedBy: data.asked_by_user?.name || data.asked_by,
+  assignedTo: data.assigned_to_user?.name || data.assigned_to,
   dueDate: data.due_date ? new Date(data.due_date) : undefined,
   createdAt: new Date(data.created_at),
   updatedAt: new Date(data.updated_at),
@@ -1026,6 +1026,8 @@ export const listRFIs = async (projectId: string, params: FilterParams = {}): Pr
     .from('rfis')
     .select(`
       *,
+      asked_by_user:users!rfis_asked_by_fkey(name),
+      assigned_to_user:users!rfis_assigned_to_fkey(name),
       attachments:rfi_attachments(
         id,
         rfi_id,
@@ -1066,6 +1068,8 @@ export const getRFI = async (id: string): Promise<API.RFI> => {
     .from('rfis')
     .select(`
       *,
+      asked_by_user:users!rfis_asked_by_fkey(name),
+      assigned_to_user:users!rfis_assigned_to_fkey(name),
       attachments:rfi_attachments(
         id,
         rfi_id,
@@ -1105,6 +1109,8 @@ export const createRFI = async (projectId: string, data: Partial<API.RFI>): Prom
     })
     .select(`
       *,
+      asked_by_user:users!rfis_asked_by_fkey(name),
+      assigned_to_user:users!rfis_assigned_to_fkey(name),
       attachments:rfi_attachments(
         id,
         rfi_id,
@@ -1136,6 +1142,8 @@ export const updateRFI = async (id: string, data: Partial<API.RFI>): Promise<API
     .eq('id', id)
     .select(`
       *,
+      asked_by_user:users!rfis_asked_by_fkey(name),
+      assigned_to_user:users!rfis_assigned_to_fkey(name),
       attachments:rfi_attachments(
         id,
         rfi_id,
