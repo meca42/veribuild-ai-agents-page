@@ -55,7 +55,9 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [projects, setProjects] = useState<API.Project[]>([]);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
+    return localStorage.getItem('selectedProjectId');
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -65,6 +67,9 @@ export default function AppLayout() {
   const userInitials = userProfile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 
                        user?.email?.substring(0, 2).toUpperCase() || 'U';
 
+  const projectContextPages = ['/drawings', '/documents', '/rfi', '/submittals'];
+  const needsProjectSelector = projectContextPages.some(page => location.pathname.startsWith(page));
+
   useEffect(() => {
     const loadProjects = async () => {
       if (!currentOrgId) return;
@@ -72,6 +77,12 @@ export default function AppLayout() {
       try {
         const response = await api.listProjects(currentOrgId, { pageSize: 100 });
         setProjects(response.data);
+        
+        if (response.data.length > 0 && !currentProjectId) {
+          const firstProjectId = response.data[0].id;
+          setCurrentProjectId(firstProjectId);
+          localStorage.setItem('selectedProjectId', firstProjectId);
+        }
       } catch (error) {
         console.error('Failed to load projects:', error);
       }
@@ -83,13 +94,13 @@ export default function AppLayout() {
   useEffect(() => {
     if (id) {
       setCurrentProjectId(id);
-    } else {
-      setCurrentProjectId(null);
+      localStorage.setItem('selectedProjectId', id);
     }
   }, [id]);
 
   const handleProjectChange = (projectId: string) => {
     setCurrentProjectId(projectId);
+    localStorage.setItem('selectedProjectId', projectId);
     navigate(`/projects/${projectId}`);
   };
 
@@ -221,7 +232,7 @@ export default function AppLayout() {
               </Select>
             )}
 
-            {projects.length > 0 && currentProjectId && (
+            {projects.length > 0 && currentProjectId && (id || needsProjectSelector) && (
               <Select 
                 value={currentProjectId}
                 onChange={(e) => handleProjectChange(e.target.value)}

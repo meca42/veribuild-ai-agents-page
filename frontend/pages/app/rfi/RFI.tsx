@@ -23,8 +23,9 @@ export default function RFI() {
   const { id: projectId } = useParams<{ id: string }>();
   const { currentOrgId } = useAuth();
   const { addToast } = useToast();
-  const [projects, setProjects] = useState<API.Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
+    return projectId || localStorage.getItem('selectedProjectId') || '';
+  });
   const [rfis, setRfis] = useState<API.RFI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,26 +36,13 @@ export default function RFI() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const loadProjects = async () => {
-      if (!currentOrgId) return;
-      
-      try {
-        const response = await api.listProjects(currentOrgId, { pageSize: 100 });
-        setProjects(response.data);
-        if (response.data.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(response.data[0].id);
-        }
-      } catch (error) {
-        console.error('Failed to load projects:', error);
-      }
-    };
-
-    loadProjects();
-  }, [currentOrgId]);
-
-  useEffect(() => {
     if (projectId) {
       setSelectedProjectId(projectId);
+    } else {
+      const storedProjectId = localStorage.getItem('selectedProjectId');
+      if (storedProjectId) {
+        setSelectedProjectId(storedProjectId);
+      }
     }
   }, [projectId]);
 
@@ -179,19 +167,6 @@ export default function RFI() {
 
       <div className="p-6">
         <div className="mb-6 flex gap-4 flex-wrap">
-          {!projectId && projects.length > 0 && (
-            <Select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-64"
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
-          )}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
             <Input
