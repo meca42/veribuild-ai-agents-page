@@ -447,7 +447,9 @@ export const uploadFiles = async (
 
   for (const fileInfo of files) {
     const bucket = 'documents';
-    const fileName = `${orgId}/${projectId || 'general'}/${Date.now()}_${fileInfo.name}`;
+    // Sanitize filename: remove spaces and special characters
+    const sanitizedName = fileInfo.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${orgId}/${projectId || 'general'}/${Date.now()}_${sanitizedName}`;
     
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucket)
@@ -1168,7 +1170,9 @@ export const addRFIAttachment = async (rfiId: string, file: File): Promise<API.R
   if (!project) throw new Error('Project not found');
 
   const bucket = 'documents';
-  const fileName = `${project.org_id}/${rfi.project_id}/rfi/${crypto.randomUUID()}_${file.name}`;
+  // Sanitize filename: remove spaces and special characters
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `${project.org_id}/${rfi.project_id}/rfi/${crypto.randomUUID()}_${sanitizedName}`;
   
   const { error: uploadError } = await supabase.storage
     .from(bucket)
@@ -1467,7 +1471,9 @@ export const addSubmittalAttachment = async (submittalId: string, file: File): P
   if (!project) throw new Error('Project not found');
 
   const bucket = 'documents';
-  const fileName = `${project.org_id}/${submittal.project_id}/submittal/${crypto.randomUUID()}_${file.name}`;
+  // Sanitize filename: remove spaces and special characters
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `${project.org_id}/${submittal.project_id}/submittal/${crypto.randomUUID()}_${sanitizedName}`;
   
   const { error: uploadError } = await supabase.storage
     .from(bucket)
