@@ -258,26 +258,18 @@ const generateSubmittals = (projectId: string, count: number): API.Submittal[] =
 };
 
 const generateBOM = (projectId: string, count: number): API.BOMItem[] => {
-  return Array.from({ length: count }, () => {
-    const required = randomInt(10, 1000);
-    const ordered = Math.min(required, randomInt(0, required + 50));
-    const delivered = Math.min(ordered, randomInt(0, ordered));
-    const installed = Math.min(delivered, randomInt(0, delivered));
-    
+  return Array.from({ length: count }, (_, i) => {
+    const createdAt = randomPastDate(60);
     return {
       id: generateId('bom'),
       projectId,
-      name: faker.commerce.productName(),
-      specification: `${faker.commerce.productAdjective()} ${faker.commerce.productMaterial()}`,
+      itemNumber: `ITEM-${String(i + 1).padStart(4, '0')}`,
+      description: faker.commerce.productName(),
+      specSection: Math.random() > 0.5 ? faker.string.numeric({ length: 2 }) + ' ' + faker.string.numeric({ length: 2 }) + ' ' + faker.string.numeric({ length: 2 }) : undefined,
       unit: randomElement(['EA', 'SF', 'LF', 'CY', 'TON', 'GAL', 'LB']),
-      quantityRequired: required,
-      quantityOrdered: ordered,
-      quantityDelivered: delivered,
-      quantityInstalled: installed,
-      unitCost: parseFloat(faker.commerce.price({ min: 5, max: 5000 })),
-      supplier: faker.company.name(),
-      leadTime: randomInt(7, 90),
-      notes: Math.random() > 0.7 ? faker.lorem.sentence() : undefined,
+      plannedQty: randomInt(10, 1000),
+      createdAt,
+      updatedAt: new Date(),
     };
   });
 };
@@ -285,35 +277,51 @@ const generateBOM = (projectId: string, count: number): API.BOMItem[] => {
 const generateDeliveries = (projectId: string, bomItems: API.BOMItem[], count: number): API.Delivery[] => {
   return Array.from({ length: count }, (_, i) => {
     const itemsInDelivery = randomElements(bomItems, randomInt(1, 5));
+    const receivedAt = randomPastDate(60);
+    const createdAt = randomPastDate(90);
     return {
       id: generateId('delivery'),
       projectId,
-      deliveryNumber: `DEL-${String(i + 1).padStart(5, '0')}`,
-      supplier: faker.company.name(),
-      deliveredAt: randomPastDate(60),
+      vendor: faker.company.name(),
+      packingListNumber: Math.random() > 0.3 ? `PKG-${faker.string.alphanumeric(8).toUpperCase()}` : undefined,
+      receivedAt,
       receivedBy: faker.person.fullName(),
-      items: itemsInDelivery.map((item) => ({
-        bomItemId: item.id,
-        quantity: randomInt(1, 50),
-      })),
       notes: Math.random() > 0.6 ? faker.lorem.sentence() : undefined,
+      createdAt,
+      updatedAt: new Date(),
+      items: itemsInDelivery.map((item) => ({
+        id: generateId('delitem'),
+        deliveryId: generateId('delivery'),
+        bomItemId: item.id,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        qty: randomInt(1, 50),
+        unit: item.unit,
+        activity: Math.random() > 0.5 ? faker.commerce.department() : undefined,
+        sourceFileId: undefined,
+        createdAt: receivedAt,
+        updatedAt: new Date(),
+      })),
     };
   });
 };
 
 const generateInventoryLots = (projectId: string, bomItems: API.BOMItem[], count: number): API.InventoryLot[] => {
-  const locations = ['NW Ramp', 'Zone A', 'Zone B', 'Zone C', 'South Yard', 'East Storage', 'Main Warehouse'];
+  const locations = ['NW Ramp', 'Zone A', 'Zone B', 'Zone C', 'South Yard', 'East Storage', 'Main Warehouse', 'default'];
   return Array.from({ length: count }, () => {
     const bomItem = randomElement(bomItems);
+    const lastCountedAt = randomPastDate(30);
+    const createdAt = randomPastDate(60);
     return {
       id: generateId('lot'),
       projectId,
       bomItemId: bomItem.id,
       location: randomElement(locations),
-      quantity: randomInt(5, 200),
-      receivedAt: randomPastDate(60),
-      expiryDate: Math.random() > 0.7 ? randomFutureDate(365) : undefined,
-      lotNumber: Math.random() > 0.5 ? `LOT-${faker.string.alphanumeric(8).toUpperCase()}` : undefined,
+      qty: randomInt(5, 200),
+      unit: bomItem.unit,
+      lastCountedAt,
+      createdAt,
+      updatedAt: new Date(),
     };
   });
 };

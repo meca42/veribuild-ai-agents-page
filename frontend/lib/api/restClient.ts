@@ -1511,24 +1511,389 @@ export const addSubmittalAttachment = async (submittalId: string, file: File): P
   }
 };
 
-export const listBOM = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.BOMItem>> => {
-  throw new Error('Not implemented - use mock client');
+const mapBOMItem = (data: any): API.BOMItem => ({
+  id: data.id,
+  projectId: data.project_id,
+  itemNumber: data.item_number,
+  description: data.description,
+  specSection: data.spec_section,
+  unit: data.unit,
+  plannedQty: parseFloat(data.planned_qty) || 0,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+});
+
+export const listBOMItems = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.BOMItem>> => {
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('bom_items')
+    .select('*', { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('item_number', { ascending: true });
+
+  if (params.q) {
+    query = query.or(`item_number.ilike.%${params.q}%,description.ilike.%${params.q}%`);
+  }
+
+  const limit = params.pageSize || 50;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapBOMItem),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const getBOMItem = async (id: string): Promise<API.BOMItem> => {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('bom_items')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapBOMItem(data);
 };
 
 export const createBOMItem = async (projectId: string, data: Partial<API.BOMItem>): Promise<API.BOMItem> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const { data: bomItem, error } = await supabase
+    .from('bom_items')
+    .insert({
+      project_id: projectId,
+      item_number: data.itemNumber || '',
+      description: data.description,
+      spec_section: data.specSection,
+      unit: data.unit,
+      planned_qty: data.plannedQty || 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapBOMItem(bomItem);
 };
 
+export const updateBOMItem = async (id: string, data: Partial<API.BOMItem>): Promise<API.BOMItem> => {
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.itemNumber !== undefined) updateData.item_number = data.itemNumber;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.specSection !== undefined) updateData.spec_section = data.specSection;
+  if (data.unit !== undefined) updateData.unit = data.unit;
+  if (data.plannedQty !== undefined) updateData.planned_qty = data.plannedQty;
+
+  const { data: bomItem, error } = await supabase
+    .from('bom_items')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapBOMItem(bomItem);
+};
+
+const mapDeliveryItem = (data: any): API.DeliveryItem => ({
+  id: data.id,
+  deliveryId: data.delivery_id,
+  bomItemId: data.bom_item_id,
+  itemNumber: data.item_number,
+  description: data.description,
+  qty: parseFloat(data.qty),
+  unit: data.unit,
+  activity: data.activity,
+  sourceFileId: data.source_file_id,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+});
+
+const mapDelivery = (data: any): API.Delivery => ({
+  id: data.id,
+  projectId: data.project_id,
+  vendor: data.vendor,
+  packingListNumber: data.packing_list_number,
+  receivedAt: new Date(data.received_at),
+  receivedBy: data.received_by,
+  notes: data.notes,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  items: (data.items || []).map(mapDeliveryItem),
+});
+
 export const listDeliveries = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Delivery>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('deliveries')
+    .select(`
+      *,
+      items:delivery_items(*)
+    `, { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('received_at', { ascending: false });
+
+  if (params.q) {
+    query = query.or(`vendor.ilike.%${params.q}%,packing_list_number.ilike.%${params.q}%`);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapDelivery),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const getDelivery = async (id: string): Promise<API.Delivery> => {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select(`
+      *,
+      items:delivery_items(*)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapDelivery(data);
 };
 
 export const createDelivery = async (projectId: string, data: Partial<API.Delivery>): Promise<API.Delivery> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const { data: delivery, error } = await supabase
+    .from('deliveries')
+    .insert({
+      project_id: projectId,
+      vendor: data.vendor,
+      packing_list_number: data.packingListNumber,
+      received_at: data.receivedAt || new Date(),
+      received_by: data.receivedBy || (await supabase.auth.getUser()).data.user?.id,
+      notes: data.notes,
+    })
+    .select(`
+      *,
+      items:delivery_items(*)
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapDelivery(delivery);
 };
 
+export const addDeliveryItem = async (
+  deliveryId: string,
+  data: {
+    itemNumber: string;
+    description?: string;
+    qty: number;
+    unit?: string;
+    activity?: string;
+    bomItemId?: string;
+    sourceFile?: File;
+  }
+): Promise<API.DeliveryItem> => {
+  const supabase = getSupabase();
+  
+  let sourceFileId: string | undefined;
+  
+  if (data.sourceFile) {
+    const { data: delivery } = await supabase
+      .from('deliveries')
+      .select('project_id')
+      .eq('id', deliveryId)
+      .single();
+
+    if (!delivery) throw new Error('Delivery not found');
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('org_id')
+      .eq('id', delivery.project_id)
+      .single();
+
+    if (!project) throw new Error('Project not found');
+
+    const bucket = 'receipts';
+    const fileName = `${project.org_id}/${delivery.project_id}/${crypto.randomUUID()}.pdf`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, data.sourceFile, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data: fileRecord, error: fileError } = await supabase
+      .from('files')
+      .insert({
+        org_id: project.org_id,
+        project_id: delivery.project_id,
+        bucket,
+        path: fileName,
+        mime_type: data.sourceFile.type,
+        size_bytes: data.sourceFile.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (fileError) {
+      await supabase.storage.from(bucket).remove([fileName]);
+      throw fileError;
+    }
+
+    sourceFileId = fileRecord.id;
+  }
+
+  const { data: deliveryItem, error } = await supabase
+    .from('delivery_items')
+    .insert({
+      delivery_id: deliveryId,
+      bom_item_id: data.bomItemId,
+      item_number: data.itemNumber,
+      description: data.description,
+      qty: data.qty,
+      unit: data.unit,
+      activity: data.activity,
+      source_file_id: sourceFileId,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  if (data.bomItemId) {
+    const { data: bomItem } = await supabase
+      .from('bom_items')
+      .select('project_id')
+      .eq('id', data.bomItemId)
+      .single();
+
+    if (bomItem) {
+      const { data: existingLot } = await supabase
+        .from('inventory_lots')
+        .select('*')
+        .eq('project_id', bomItem.project_id)
+        .eq('bom_item_id', data.bomItemId)
+        .eq('location', 'default')
+        .single();
+
+      if (existingLot) {
+        await supabase
+          .from('inventory_lots')
+          .update({
+            qty: parseFloat(existingLot.qty) + data.qty,
+            last_counted_at: new Date().toISOString(),
+          })
+          .eq('id', existingLot.id);
+      } else {
+        await supabase
+          .from('inventory_lots')
+          .insert({
+            project_id: bomItem.project_id,
+            bom_item_id: data.bomItemId,
+            location: 'default',
+            qty: data.qty,
+            unit: data.unit,
+            last_counted_at: new Date().toISOString(),
+          });
+      }
+    }
+  }
+
+  return mapDeliveryItem(deliveryItem);
+};
+
+const mapInventoryLot = (data: any): API.InventoryLot => ({
+  id: data.id,
+  projectId: data.project_id,
+  bomItemId: data.bom_item_id,
+  location: data.location,
+  qty: parseFloat(data.qty),
+  unit: data.unit,
+  lastCountedAt: new Date(data.last_counted_at),
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+});
+
 export const listInventoryLots = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.InventoryLot>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('inventory_lots')
+    .select('*', { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('last_counted_at', { ascending: false });
+
+  if (params.q) {
+    query = query.ilike('location', `%${params.q}%`);
+  }
+
+  const limit = params.pageSize || 50;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapInventoryLot),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const getInventoryLot = async (id: string): Promise<API.InventoryLot> => {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('inventory_lots')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapInventoryLot(data);
+};
+
+export const updateInventoryLot = async (id: string, data: { qty?: number; lastCountedAt?: Date }): Promise<API.InventoryLot> => {
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.qty !== undefined) updateData.qty = data.qty;
+  if (data.lastCountedAt !== undefined) updateData.last_counted_at = data.lastCountedAt;
+
+  const { data: lot, error } = await supabase
+    .from('inventory_lots')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapInventoryLot(lot);
 };
 
 export const listIssues = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Issue>> => {

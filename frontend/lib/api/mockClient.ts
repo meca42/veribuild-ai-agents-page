@@ -657,13 +657,13 @@ export const addSubmittalAttachment = async (submittalId: string, file: File): P
   });
 };
 
-export const listBOM = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.BOMItem>> => {
+export const listBOMItems = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.BOMItem>> => {
   return simulateLatency(() => {
     const db = getDatabase();
     let items = db.bomItems.filter((b) => b.projectId === projectId);
 
     if (params.q) {
-      items = applySearch(items, params.q, ['name', 'specification', 'supplier']);
+      items = applySearch(items, params.q, ['itemNumber', 'description', 'specSection']);
     }
 
     if (params.sortBy) {
@@ -674,26 +674,46 @@ export const listBOM = async (projectId: string, params: FilterParams = {}): Pro
   });
 };
 
+export const getBOMItem = async (id: string): Promise<API.BOMItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const item = db.bomItems.find((b) => b.id === id);
+    if (!item) throw new Error('BOM item not found');
+    return item;
+  });
+};
+
 export const createBOMItem = async (projectId: string, data: Partial<API.BOMItem>): Promise<API.BOMItem> => {
   return simulateLatency(() => {
     const db = getDatabase();
     const item: API.BOMItem = {
       id: generateId('bom'),
       projectId,
-      name: data.name || 'Untitled Item',
-      specification: data.specification || '',
-      unit: data.unit || 'EA',
-      quantityRequired: data.quantityRequired || 0,
-      quantityOrdered: data.quantityOrdered || 0,
-      quantityDelivered: data.quantityDelivered || 0,
-      quantityInstalled: data.quantityInstalled || 0,
-      unitCost: data.unitCost,
-      supplier: data.supplier,
-      leadTime: data.leadTime,
-      notes: data.notes,
+      itemNumber: data.itemNumber || `ITEM-${db.bomItems.length + 1}`,
+      description: data.description,
+      specSection: data.specSection,
+      unit: data.unit,
+      plannedQty: data.plannedQty || 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
     db.bomItems.push(item);
     return item;
+  });
+};
+
+export const updateBOMItem = async (id: string, data: Partial<API.BOMItem>): Promise<API.BOMItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.bomItems.findIndex((b) => b.id === id);
+    if (index === -1) throw new Error('BOM item not found');
+    
+    db.bomItems[index] = {
+      ...db.bomItems[index],
+      ...data,
+      updatedAt: new Date(),
+    };
+    return db.bomItems[index];
   });
 };
 
@@ -703,7 +723,7 @@ export const listDeliveries = async (projectId: string, params: FilterParams = {
     let deliveries = db.deliveries.filter((d) => d.projectId === projectId);
 
     if (params.q) {
-      deliveries = applySearch(deliveries, params.q, ['deliveryNumber', 'supplier']);
+      deliveries = applySearch(deliveries, params.q, ['packingListNumber', 'vendor']);
     }
 
     if (params.sortBy) {
@@ -714,24 +734,99 @@ export const listDeliveries = async (projectId: string, params: FilterParams = {
   });
 };
 
+export const getDelivery = async (id: string): Promise<API.Delivery> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const delivery = db.deliveries.find((d) => d.id === id);
+    if (!delivery) throw new Error('Delivery not found');
+    return delivery;
+  });
+};
+
 export const createDelivery = async (projectId: string, data: Partial<API.Delivery>): Promise<API.Delivery> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    const existingDeliveries = db.deliveries.filter((d) => d.projectId === projectId);
-    const nextNumber = existingDeliveries.length + 1;
     
     const delivery: API.Delivery = {
       id: generateId('delivery'),
       projectId,
-      deliveryNumber: `DEL-${String(nextNumber).padStart(5, '0')}`,
-      supplier: data.supplier || 'Unknown Supplier',
-      deliveredAt: data.deliveredAt || new Date(),
+      vendor: data.vendor,
+      packingListNumber: data.packingListNumber,
+      receivedAt: data.receivedAt || new Date(),
       receivedBy: data.receivedBy || 'Current User',
-      items: data.items || [],
       notes: data.notes,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      items: [],
     };
     db.deliveries.push(delivery);
     return delivery;
+  });
+};
+
+export const addDeliveryItem = async (
+  deliveryId: string,
+  data: {
+    itemNumber: string;
+    description?: string;
+    qty: number;
+    unit?: string;
+    activity?: string;
+    bomItemId?: string;
+    sourceFile?: File;
+  }
+): Promise<API.DeliveryItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const deliveryIndex = db.deliveries.findIndex((d) => d.id === deliveryId);
+    if (deliveryIndex === -1) throw new Error('Delivery not found');
+
+    const item: API.DeliveryItem = {
+      id: generateId('delitem'),
+      deliveryId,
+      bomItemId: data.bomItemId,
+      itemNumber: data.itemNumber,
+      description: data.description,
+      qty: data.qty,
+      unit: data.unit,
+      activity: data.activity,
+      sourceFileId: data.sourceFile ? generateId('file') : undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (!db.deliveries[deliveryIndex].items) {
+      db.deliveries[deliveryIndex].items = [];
+    }
+    db.deliveries[deliveryIndex].items!.push(item);
+
+    if (data.bomItemId) {
+      const lotIndex = db.inventoryLots.findIndex(
+        (l) => l.bomItemId === data.bomItemId && l.location === 'default'
+      );
+
+      if (lotIndex !== -1) {
+        db.inventoryLots[lotIndex].qty += data.qty;
+        db.inventoryLots[lotIndex].lastCountedAt = new Date();
+      } else {
+        const bomItem = db.bomItems.find((b) => b.id === data.bomItemId);
+        if (bomItem) {
+          db.inventoryLots.push({
+            id: generateId('lot'),
+            projectId: bomItem.projectId,
+            bomItemId: data.bomItemId,
+            location: 'default',
+            qty: data.qty,
+            unit: data.unit,
+            lastCountedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      }
+    }
+
+    return item;
   });
 };
 
@@ -748,11 +843,38 @@ export const listInventoryLots = async (projectId: string, params: FilterParams 
       lots = lots.filter((l) => l.bomItemId === params.bomItemId);
     }
 
+    if (params.q) {
+      lots = applySearch(lots, params.q, ['location']);
+    }
+
     if (params.sortBy) {
       lots = applySort(lots, params.sortBy, params.sortDir || 'asc');
     }
 
     return createPaginatedResponse(lots, params);
+  });
+};
+
+export const getInventoryLot = async (id: string): Promise<API.InventoryLot> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const lot = db.inventoryLots.find((l) => l.id === id);
+    if (!lot) throw new Error('Inventory lot not found');
+    return lot;
+  });
+};
+
+export const updateInventoryLot = async (id: string, data: { qty?: number; lastCountedAt?: Date }): Promise<API.InventoryLot> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.inventoryLots.findIndex((l) => l.id === id);
+    if (index === -1) throw new Error('Inventory lot not found');
+    
+    if (data.qty !== undefined) db.inventoryLots[index].qty = data.qty;
+    if (data.lastCountedAt !== undefined) db.inventoryLots[index].lastCountedAt = data.lastCountedAt;
+    db.inventoryLots[index].updatedAt = new Date();
+    
+    return db.inventoryLots[index];
   });
 };
 

@@ -200,39 +200,52 @@ export interface Submittal {
 export interface BOMItem {
   id: string;
   projectId: string;
-  name: string;
-  specification: string;
-  unit: string;
-  quantityRequired: number;
-  quantityOrdered: number;
-  quantityDelivered: number;
-  quantityInstalled: number;
-  unitCost?: number;
-  supplier?: string;
-  leadTime?: number;
-  notes?: string;
+  itemNumber: string;
+  description?: string;
+  specSection?: string;
+  unit?: string;
+  plannedQty: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DeliveryItem {
+  id: string;
+  deliveryId: string;
+  bomItemId?: string;
+  itemNumber: string;
+  description?: string;
+  qty: number;
+  unit?: string;
+  activity?: string;
+  sourceFileId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Delivery {
   id: string;
   projectId: string;
-  deliveryNumber: string;
-  supplier: string;
-  deliveredAt: Date;
-  receivedBy: string;
-  items: Array<{ bomItemId: string; quantity: number }>;
+  vendor?: string;
+  packingListNumber?: string;
+  receivedAt: Date;
+  receivedBy?: string;
   notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: DeliveryItem[];
 }
 
 export interface InventoryLot {
   id: string;
   projectId: string;
-  bomItemId: string;
-  location: string;
-  quantity: number;
-  receivedAt: Date;
-  expiryDate?: Date;
-  lotNumber?: string;
+  bomItemId?: string;
+  location?: string;
+  qty: number;
+  unit?: string;
+  lastCountedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Issue {
