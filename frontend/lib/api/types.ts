@@ -4,8 +4,9 @@ export type StepStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'blocked';
 export type FileStatus = 'uploading' | 'ready' | 'archived';
 export type DrawingStatus = 'draft' | 'under_review' | 'approved' | 'superseded';
 export type DocumentStatus = 'draft' | 'under_review' | 'approved' | 'archived';
-export type RFIStatus = 'open' | 'pending_response' | 'answered' | 'closed';
-export type SubmittalStatus = 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'revised';
+export type RFIStatus = 'open' | 'answered' | 'closed';
+export type SubmittalStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'resubmit';
+export type SubmittalItemStatus = 'pending' | 'approved' | 'rejected' | 'n/a';
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
 export type InspectionStatus = 'scheduled' | 'in_progress' | 'passed' | 'failed' | 'n/a';
@@ -137,25 +138,47 @@ export interface RFI {
   id: string;
   projectId: string;
   number: string;
-  subject: string;
+  title: string;
   question: string;
-  response?: string;
+  answer?: string;
   status: RFIStatus;
-  priority: IssuePriority;
-  requestedBy: string;
+  askedBy?: string;
   assignedTo?: string;
   dueDate?: Date;
-  respondedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  attachments?: RFIAttachment[];
+}
+
+export interface RFIAttachment {
+  id: string;
+  rfiId: string;
+  fileId: string;
+  fileName: string;
+  fileUrl: string;
+  createdAt: Date;
 }
 
 export interface SubmittalItem {
   id: string;
+  submittalId: string;
   description: string;
-  specification: string;
-  quantity: number;
-  status: SubmittalStatus;
+  qty?: number;
+  unit?: string;
+  manufacturer?: string;
+  model?: string;
+  status: SubmittalItemStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SubmittalAttachment {
+  id: string;
+  submittalId: string;
+  fileId: string;
+  fileName: string;
+  fileUrl: string;
+  createdAt: Date;
 }
 
 export interface Submittal {
@@ -163,16 +186,15 @@ export interface Submittal {
   projectId: string;
   number: string;
   title: string;
-  type: string;
+  specSection?: string;
   status: SubmittalStatus;
-  items: SubmittalItem[];
-  submittedBy: string;
-  submittedAt?: Date;
-  reviewedBy?: string;
-  reviewedAt?: Date;
+  submittedBy?: string;
+  reviewerId?: string;
   dueDate?: Date;
   createdAt: Date;
   updatedAt: Date;
+  items?: SubmittalItem[];
+  attachments?: SubmittalAttachment[];
 }
 
 export interface BOMItem {

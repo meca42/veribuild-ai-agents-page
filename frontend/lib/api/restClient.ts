@@ -994,36 +994,521 @@ export const addDocumentVersion = async (
   }
 };
 
+const mapRFI = (data: any): API.RFI => ({
+  id: data.id,
+  projectId: data.project_id,
+  number: data.number,
+  title: data.title,
+  question: data.question,
+  answer: data.answer,
+  status: data.status,
+  askedBy: data.asked_by,
+  assignedTo: data.assigned_to,
+  dueDate: data.due_date ? new Date(data.due_date) : undefined,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  attachments: (data.attachments || []).map((a: any) => ({
+    id: a.id,
+    rfiId: a.rfi_id,
+    fileId: a.file_id,
+    fileName: a.file?.path?.split('/').pop() || 'Unknown',
+    fileUrl: a.file?.path ? createBrowserClient()?.storage.from(a.file.bucket).getPublicUrl(a.file.path).data.publicUrl || '' : '',
+    createdAt: new Date(a.created_at),
+  })),
+});
+
 export const listRFIs = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.RFI>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('rfis')
+    .select(`
+      *,
+      attachments:rfi_attachments(
+        id,
+        rfi_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `, { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (params.q) {
+    query = query.or(`number.ilike.%${params.q}%,title.ilike.%${params.q}%,question.ilike.%${params.q}%`);
+  }
+
+  if (params.status) {
+    query = query.eq('status', params.status);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapRFI),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
 };
 
 export const getRFI = async (id: string): Promise<API.RFI> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('rfis')
+    .select(`
+      *,
+      attachments:rfi_attachments(
+        id,
+        rfi_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapRFI(data);
 };
 
 export const createRFI = async (projectId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const { count } = await supabase
+    .from('rfis')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+
+  const rfiNumber = data.number || `RFI-${String((count || 0) + 1).padStart(3, '0')}`;
+
+  const { data: rfi, error } = await supabase
+    .from('rfis')
+    .insert({
+      project_id: projectId,
+      number: rfiNumber,
+      title: data.title || 'Untitled RFI',
+      question: data.question || '',
+      status: data.status || 'open',
+      asked_by: data.askedBy || (await supabase.auth.getUser()).data.user?.id,
+      assigned_to: data.assignedTo,
+      due_date: data.dueDate,
+    })
+    .select(`
+      *,
+      attachments:rfi_attachments(
+        id,
+        rfi_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapRFI(rfi);
 };
 
 export const updateRFI = async (id: string, data: Partial<API.RFI>): Promise<API.RFI> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.question !== undefined) updateData.question = data.question;
+  if (data.answer !== undefined) updateData.answer = data.answer;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.assignedTo !== undefined) updateData.assigned_to = data.assignedTo;
+  if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
+
+  const { data: rfi, error } = await supabase
+    .from('rfis')
+    .update(updateData)
+    .eq('id', id)
+    .select(`
+      *,
+      attachments:rfi_attachments(
+        id,
+        rfi_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapRFI(rfi);
 };
 
+export const addRFIAttachment = async (rfiId: string, file: File): Promise<API.RFI> => {
+  const supabase = getSupabase();
+  
+  const { data: rfi } = await supabase
+    .from('rfis')
+    .select('project_id')
+    .eq('id', rfiId)
+    .single();
+
+  if (!rfi) throw new Error('RFI not found');
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('org_id')
+    .eq('id', rfi.project_id)
+    .single();
+
+  if (!project) throw new Error('Project not found');
+
+  const bucket = 'documents';
+  const fileName = `${project.org_id}/${rfi.project_id}/rfi/${crypto.randomUUID()}_${file.name}`;
+  
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  try {
+    const { data: fileRecord, error: fileError } = await supabase
+      .from('files')
+      .insert({
+        org_id: project.org_id,
+        project_id: rfi.project_id,
+        bucket,
+        path: fileName,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (fileError) throw fileError;
+
+    const { error: attachmentError } = await supabase
+      .from('rfi_attachments')
+      .insert({
+        rfi_id: rfiId,
+        file_id: fileRecord.id,
+      });
+
+    if (attachmentError) throw attachmentError;
+
+    return await getRFI(rfiId);
+  } catch (error) {
+    await supabase.storage.from(bucket).remove([fileName]);
+    throw error;
+  }
+};
+
+const mapSubmittal = (data: any): API.Submittal => ({
+  id: data.id,
+  projectId: data.project_id,
+  number: data.number,
+  title: data.title,
+  specSection: data.spec_section,
+  status: data.status,
+  submittedBy: data.submitted_by,
+  reviewerId: data.reviewer_id,
+  dueDate: data.due_date ? new Date(data.due_date) : undefined,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  items: (data.items || []).map((i: any) => ({
+    id: i.id,
+    submittalId: i.submittal_id,
+    description: i.description,
+    qty: i.qty,
+    unit: i.unit,
+    manufacturer: i.manufacturer,
+    model: i.model,
+    status: i.status,
+    createdAt: new Date(i.created_at),
+    updatedAt: new Date(i.updated_at),
+  })),
+  attachments: (data.attachments || []).map((a: any) => ({
+    id: a.id,
+    submittalId: a.submittal_id,
+    fileId: a.file_id,
+    fileName: a.file?.path?.split('/').pop() || 'Unknown',
+    fileUrl: a.file?.path ? createBrowserClient()?.storage.from(a.file.bucket).getPublicUrl(a.file.path).data.publicUrl || '' : '',
+    createdAt: new Date(a.created_at),
+  })),
+});
+
 export const listSubmittals = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Submittal>> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('submittals')
+    .select(`
+      *,
+      items:submittal_items(*),
+      attachments:submittal_attachments(
+        id,
+        submittal_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `, { count: 'exact' })
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+
+  if (params.q) {
+    query = query.or(`number.ilike.%${params.q}%,title.ilike.%${params.q}%,spec_section.ilike.%${params.q}%`);
+  }
+
+  if (params.status) {
+    query = query.eq('status', params.status);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapSubmittal),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
 };
 
 export const getSubmittal = async (id: string): Promise<API.Submittal> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('submittals')
+    .select(`
+      *,
+      items:submittal_items(*),
+      attachments:submittal_attachments(
+        id,
+        submittal_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return mapSubmittal(data);
 };
 
 export const createSubmittal = async (projectId: string, data: Partial<API.Submittal>): Promise<API.Submittal> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const { count } = await supabase
+    .from('submittals')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+
+  const submittalNumber = data.number || `SUB-${String((count || 0) + 1).padStart(3, '0')}`;
+
+  const { data: submittal, error } = await supabase
+    .from('submittals')
+    .insert({
+      project_id: projectId,
+      number: submittalNumber,
+      title: data.title || 'Untitled Submittal',
+      spec_section: data.specSection,
+      status: data.status || 'draft',
+      submitted_by: data.submittedBy || (await supabase.auth.getUser()).data.user?.id,
+      reviewer_id: data.reviewerId,
+      due_date: data.dueDate,
+    })
+    .select(`
+      *,
+      items:submittal_items(*),
+      attachments:submittal_attachments(
+        id,
+        submittal_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapSubmittal(submittal);
 };
 
 export const updateSubmittal = async (id: string, data: Partial<API.Submittal>): Promise<API.Submittal> => {
-  throw new Error('Not implemented - use mock client');
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.specSection !== undefined) updateData.spec_section = data.specSection;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.reviewerId !== undefined) updateData.reviewer_id = data.reviewerId;
+  if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
+
+  const { data: submittal, error } = await supabase
+    .from('submittals')
+    .update(updateData)
+    .eq('id', id)
+    .select(`
+      *,
+      items:submittal_items(*),
+      attachments:submittal_attachments(
+        id,
+        submittal_id,
+        file_id,
+        created_at,
+        file:files(id, path, bucket, mime_type, size_bytes)
+      )
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapSubmittal(submittal);
+};
+
+export const addSubmittalItem = async (submittalId: string, data: Partial<API.SubmittalItem>): Promise<API.SubmittalItem> => {
+  const supabase = getSupabase();
+  
+  const { data: item, error } = await supabase
+    .from('submittal_items')
+    .insert({
+      submittal_id: submittalId,
+      description: data.description || '',
+      qty: data.qty,
+      unit: data.unit,
+      manufacturer: data.manufacturer,
+      model: data.model,
+      status: data.status || 'pending',
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  
+  return {
+    id: item.id,
+    submittalId: item.submittal_id,
+    description: item.description,
+    qty: item.qty,
+    unit: item.unit,
+    manufacturer: item.manufacturer,
+    model: item.model,
+    status: item.status,
+    createdAt: new Date(item.created_at),
+    updatedAt: new Date(item.updated_at),
+  };
+};
+
+export const updateSubmittalItem = async (itemId: string, data: Partial<API.SubmittalItem>): Promise<API.SubmittalItem> => {
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.qty !== undefined) updateData.qty = data.qty;
+  if (data.unit !== undefined) updateData.unit = data.unit;
+  if (data.manufacturer !== undefined) updateData.manufacturer = data.manufacturer;
+  if (data.model !== undefined) updateData.model = data.model;
+  if (data.status !== undefined) updateData.status = data.status;
+
+  const { data: item, error } = await supabase
+    .from('submittal_items')
+    .update(updateData)
+    .eq('id', itemId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  
+  return {
+    id: item.id,
+    submittalId: item.submittal_id,
+    description: item.description,
+    qty: item.qty,
+    unit: item.unit,
+    manufacturer: item.manufacturer,
+    model: item.model,
+    status: item.status,
+    createdAt: new Date(item.created_at),
+    updatedAt: new Date(item.updated_at),
+  };
+};
+
+export const addSubmittalAttachment = async (submittalId: string, file: File): Promise<API.Submittal> => {
+  const supabase = getSupabase();
+  
+  const { data: submittal } = await supabase
+    .from('submittals')
+    .select('project_id')
+    .eq('id', submittalId)
+    .single();
+
+  if (!submittal) throw new Error('Submittal not found');
+
+  const { data: project } = await supabase
+    .from('projects')
+    .select('org_id')
+    .eq('id', submittal.project_id)
+    .single();
+
+  if (!project) throw new Error('Project not found');
+
+  const bucket = 'documents';
+  const fileName = `${project.org_id}/${submittal.project_id}/submittal/${crypto.randomUUID()}_${file.name}`;
+  
+  const { error: uploadError } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  try {
+    const { data: fileRecord, error: fileError } = await supabase
+      .from('files')
+      .insert({
+        org_id: project.org_id,
+        project_id: submittal.project_id,
+        bucket,
+        path: fileName,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (fileError) throw fileError;
+
+    const { error: attachmentError } = await supabase
+      .from('submittal_attachments')
+      .insert({
+        submittal_id: submittalId,
+        file_id: fileRecord.id,
+      });
+
+    if (attachmentError) throw attachmentError;
+
+    return await getSubmittal(submittalId);
+  } catch (error) {
+    await supabase.storage.from(bucket).remove([fileName]);
+    throw error;
+  }
 };
 
 export const listBOM = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.BOMItem>> => {

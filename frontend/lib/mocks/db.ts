@@ -50,9 +50,9 @@ const drawingDisciplines = ['A', 'S', 'M', 'E', 'P', 'C', 'L'];
 const drawingStatuses: API.DrawingStatus[] = ['draft', 'under_review', 'approved', 'superseded'];
 const documentTypes = ['Contract', 'Specification', 'Report', 'Certificate', 'Permit', 'Safety Plan'];
 const documentStatuses: API.DocumentStatus[] = ['draft', 'under_review', 'approved', 'archived'];
-const rfiStatuses: API.RFIStatus[] = ['open', 'pending_response', 'answered', 'closed'];
+const rfiStatuses: API.RFIStatus[] = ['open', 'answered', 'closed'];
 const submittalTypes = ['Shop Drawing', 'Product Data', 'Sample', 'Test Report', 'Closeout'];
-const submittalStatuses: API.SubmittalStatus[] = ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'revised'];
+const submittalStatuses: API.SubmittalStatus[] = ['draft', 'submitted', 'approved', 'rejected', 'resubmit'];
 const priorities: API.IssuePriority[] = ['low', 'medium', 'high', 'critical'];
 const issueStatuses: API.IssueStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
 const inspectionTypes = ['Foundation', 'Framing', 'Electrical', 'Plumbing', 'HVAC', 'Final'];
@@ -209,16 +209,14 @@ const generateRFIs = (projectId: string, count: number): API.RFI[] => {
     return {
       id: generateId('rfi'),
       projectId,
-      number: `RFI-${String(i + 1).padStart(4, '0')}`,
-      subject: faker.company.catchPhrase(),
+      number: `RFI-${String(i + 1).padStart(3, '0')}`,
+      title: faker.company.catchPhrase(),
       question: faker.lorem.paragraph(),
-      response: status === 'answered' || status === 'closed' ? faker.lorem.paragraph() : undefined,
+      answer: status === 'answered' || status === 'closed' ? faker.lorem.paragraph() : undefined,
       status,
-      priority: randomElement(priorities),
-      requestedBy: faker.person.fullName(),
+      askedBy: faker.person.fullName(),
       assignedTo: faker.person.fullName(),
       dueDate: randomFutureDate(30),
-      respondedAt: status === 'answered' || status === 'closed' ? randomDate(createdAt, new Date()) : undefined,
       createdAt,
       updatedAt: new Date(),
     };
@@ -234,21 +232,24 @@ const generateSubmittals = (projectId: string, count: number): API.Submittal[] =
     return {
       id: generateId('submittal'),
       projectId,
-      number: `SUB-${String(i + 1).padStart(4, '0')}`,
+      number: `SUB-${String(i + 1).padStart(3, '0')}`,
       title: faker.company.catchPhrase(),
-      type: randomElement(submittalTypes),
+      specSection: '03 30 00',
       status,
       items: Array.from({ length: itemCount }, () => ({
         id: generateId('item'),
+        submittalId: generateId('submittal'),
         description: faker.commerce.productName(),
-        specification: `${randomElement(['ASTM', 'UL', 'CSA'])} ${faker.string.alphanumeric(6).toUpperCase()}`,
-        quantity: randomInt(1, 500),
-        status: randomElement(submittalStatuses),
+        qty: randomInt(1, 500),
+        unit: randomElement(['EA', 'SF', 'LF', 'CY']),
+        manufacturer: faker.company.name(),
+        model: faker.string.alphanumeric(8).toUpperCase(),
+        status: randomElement(['pending', 'approved', 'rejected', 'n/a'] as API.SubmittalItemStatus[]),
+        createdAt,
+        updatedAt: new Date(),
       })),
       submittedBy: faker.person.fullName(),
-      submittedAt: status !== 'draft' ? randomDate(createdAt, new Date()) : undefined,
-      reviewedBy: status === 'approved' || status === 'rejected' ? faker.person.fullName() : undefined,
-      reviewedAt: status === 'approved' || status === 'rejected' ? randomDate(createdAt, new Date()) : undefined,
+      reviewerId: status === 'approved' || status === 'rejected' ? faker.person.fullName() : undefined,
       dueDate: randomFutureDate(45),
       createdAt,
       updatedAt: new Date(),

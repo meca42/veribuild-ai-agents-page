@@ -451,15 +451,11 @@ export const listRFIs = async (projectId: string, params: FilterParams = {}): Pr
     let rfis = db.rfis.filter((r) => r.projectId === projectId);
 
     if (params.q) {
-      rfis = applySearch(rfis, params.q, ['number', 'subject', 'question']);
+      rfis = applySearch(rfis, params.q, ['number', 'title', 'question']);
     }
 
     if (params.status) {
       rfis = rfis.filter((r) => r.status === params.status);
-    }
-
-    if (params.priority) {
-      rfis = rfis.filter((r) => r.priority === params.priority);
     }
 
     if (params.sortBy) {
@@ -488,16 +484,14 @@ export const createRFI = async (projectId: string, data: Partial<API.RFI>): Prom
     const rfi: API.RFI = {
       id: generateId('rfi'),
       projectId,
-      number: `RFI-${String(nextNumber).padStart(4, '0')}`,
-      subject: data.subject || 'Untitled RFI',
+      number: data.number || `RFI-${String(nextNumber).padStart(3, '0')}`,
+      title: data.title || 'Untitled RFI',
       question: data.question || '',
-      response: data.response,
+      answer: data.answer,
       status: data.status || 'open',
-      priority: data.priority || 'medium',
-      requestedBy: data.requestedBy || 'Current User',
+      askedBy: data.askedBy,
       assignedTo: data.assignedTo,
       dueDate: data.dueDate,
-      respondedAt: data.respondedAt,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -527,15 +521,11 @@ export const listSubmittals = async (projectId: string, params: FilterParams = {
     let submittals = db.submittals.filter((s) => s.projectId === projectId);
 
     if (params.q) {
-      submittals = applySearch(submittals, params.q, ['number', 'title', 'type']);
+      submittals = applySearch(submittals, params.q, ['number', 'title', 'specSection']);
     }
 
     if (params.status) {
       submittals = submittals.filter((s) => s.status === params.status);
-    }
-
-    if (params.type) {
-      submittals = submittals.filter((s) => s.type === params.type);
     }
 
     if (params.sortBy) {
@@ -564,15 +554,13 @@ export const createSubmittal = async (projectId: string, data: Partial<API.Submi
     const submittal: API.Submittal = {
       id: generateId('submittal'),
       projectId,
-      number: `SUB-${String(nextNumber).padStart(4, '0')}`,
+      number: `SUB-${String(nextNumber).padStart(3, '0')}`,
       title: data.title || 'Untitled Submittal',
-      type: data.type || 'General',
+      specSection: data.specSection,
       status: data.status || 'draft',
       items: data.items || [],
       submittedBy: data.submittedBy || 'Current User',
-      submittedAt: data.submittedAt,
-      reviewedBy: data.reviewedBy,
-      reviewedAt: data.reviewedAt,
+      reviewerId: data.reviewerId,
       dueDate: data.dueDate,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -593,6 +581,78 @@ export const updateSubmittal = async (id: string, data: Partial<API.Submittal>):
       ...data,
       updatedAt: new Date(),
     };
+    return db.submittals[index];
+  });
+};
+
+export const addRFIAttachment = async (rfiId: string, file: File): Promise<API.RFI> => {
+  return simulateLatency(async () => {
+    const db = getDatabase();
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
+    if (index === -1) throw new Error('RFI not found');
+    
+    return db.rfis[index];
+  });
+};
+
+export const addSubmittalItem = async (submittalId: string, data: Partial<API.SubmittalItem>): Promise<API.SubmittalItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.submittals.findIndex((s) => s.id === submittalId);
+    if (index === -1) throw new Error('Submittal not found');
+    
+    const item: API.SubmittalItem = {
+      id: generateId('item'),
+      submittalId,
+      description: data.description || '',
+      qty: data.qty,
+      unit: data.unit,
+      manufacturer: data.manufacturer,
+      model: data.model,
+      status: data.status || 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    if (!db.submittals[index].items) {
+      db.submittals[index].items = [];
+    }
+    db.submittals[index].items!.push(item);
+    db.submittals[index].updatedAt = new Date();
+    
+    return item;
+  });
+};
+
+export const updateSubmittalItem = async (itemId: string, data: Partial<API.SubmittalItem>): Promise<API.SubmittalItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    
+    for (const submittal of db.submittals) {
+      if (submittal.items) {
+        const itemIndex = submittal.items.findIndex((i) => i.id === itemId);
+        if (itemIndex !== -1) {
+          submittal.items[itemIndex] = {
+            ...submittal.items[itemIndex],
+            ...data,
+            updatedAt: new Date(),
+          };
+          submittal.updatedAt = new Date();
+          return submittal.items[itemIndex];
+        }
+      }
+    }
+    
+    throw new Error('Submittal item not found');
+  });
+};
+
+export const addSubmittalAttachment = async (submittalId: string, file: File): Promise<API.Submittal> => {
+  return simulateLatency(async () => {
+    const db = getDatabase();
+    const index = db.submittals.findIndex((s) => s.id === submittalId);
+    if (index === -1) throw new Error('Submittal not found');
+    
     return db.submittals[index];
   });
 };
