@@ -14,6 +14,7 @@ interface UploadDrawingModalProps {
   onClose: () => void;
   onSubmit: (data: DrawingFormData) => Promise<void>;
   isLoading?: boolean;
+  projectId?: string;
 }
 
 export interface DrawingFormData {
@@ -25,17 +26,22 @@ export interface DrawingFormData {
   description?: string;
 }
 
-export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoading }: UploadDrawingModalProps) {
+export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoading, projectId }: UploadDrawingModalProps) {
   const { currentOrgId } = useAuth();
   const [projects, setProjects] = useState<API.Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [formData, setFormData] = useState<DrawingFormData>({
-    projectId: '',
+    projectId: projectId || '',
     number: '',
     file: null,
   });
 
   useEffect(() => {
+    if (projectId) {
+      setFormData(prev => ({ ...prev, projectId }));
+      return;
+    }
+
     const loadProjects = async () => {
       if (!currentOrgId || !isOpen) return;
       
@@ -54,7 +60,7 @@ export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoadin
     };
 
     loadProjects();
-  }, [currentOrgId, isOpen]);
+  }, [currentOrgId, isOpen, projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,21 +83,23 @@ export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoadin
     >
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
-          <FormRow label="Project" required>
-            <Select
-              value={formData.projectId}
-              onChange={(e) => handleChange('projectId', e.target.value)}
-              required
-              disabled={loadingProjects}
-            >
-              <option value="">Select project</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
-          </FormRow>
+          {!projectId && (
+            <FormRow label="Project" required>
+              <Select
+                value={formData.projectId}
+                onChange={(e) => handleChange('projectId', e.target.value)}
+                required
+                disabled={loadingProjects}
+              >
+                <option value="">Select project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </Select>
+            </FormRow>
+          )}
 
           <FormRow label="Drawing File" required>
             <div className="space-y-2">

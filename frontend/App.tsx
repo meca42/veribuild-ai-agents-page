@@ -68,6 +68,7 @@ export default function App() {
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/phases" element={<ProjectPhases />} />
               <Route path="/projects/:id/steps" element={<ProjectSteps />} />
+              <Route path="/projects/:id/drawings" element={<Drawings />} />
               <Route path="/files" element={<Files />} />
               <Route path="/drawings" element={<Drawings />} />
               <Route path="/documents" element={<Documents />} />

@@ -125,7 +125,7 @@ export default function ProjectDetail() {
           </Link>
 
           <Link
-            to="/drawings"
+            to={`/projects/${id}/drawings`}
             className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
           >
             <div className="flex items-center gap-3 mb-3">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { Upload, Search, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -27,6 +28,7 @@ const disciplineColors = {
 };
 
 export default function Drawings() {
+  const { id: projectId } = useParams<{ id: string }>();
   const { currentOrgId } = useAuth();
   const { addToast } = useToast();
   const [drawings, setDrawings] = useState<API.Drawing[]>([]);
@@ -46,23 +48,26 @@ export default function Drawings() {
         const supabase = (await import('@/lib/supabase/client')).createBrowserClient();
         if (!supabase) throw new Error('Supabase not configured');
 
-        const { data: projectsData } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('org_id', currentOrgId);
+        let query = supabase.from('drawings').select('*');
 
-        if (!projectsData || projectsData.length === 0) {
-          setDrawings([]);
-          return;
+        if (projectId) {
+          query = query.eq('project_id', projectId);
+        } else {
+          const { data: projectsData } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('org_id', currentOrgId);
+
+          if (!projectsData || projectsData.length === 0) {
+            setDrawings([]);
+            return;
+          }
+
+          const projectIds = projectsData.map(p => p.id);
+          query = query.in('project_id', projectIds);
         }
 
-        const projectIds = projectsData.map(p => p.id);
-        
-        const { data, error } = await supabase
-          .from('drawings')
-          .select('*')
-          .in('project_id', projectIds)
-          .order('created_at', { ascending: false });
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -87,7 +92,7 @@ export default function Drawings() {
     };
 
     fetchDrawings();
-  }, [currentOrgId, selectedProject]);
+  }, [currentOrgId, projectId, selectedProject]);
 
   const handleUploadDrawing = async (formData: DrawingFormData) => {
     if (!currentOrgId || !formData.file || !formData.projectId) {
@@ -215,6 +220,7 @@ export default function Drawings() {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleUploadDrawing}
         isLoading={isUploading}
+        projectId={projectId}
       />
 
       <div className="p-6">
