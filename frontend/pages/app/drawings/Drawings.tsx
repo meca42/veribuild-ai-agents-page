@@ -1,18 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Upload, Search, Image as ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
-import { useDrawings } from "@/lib/mocks/files";
+import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+import type * as API from "@/lib/api/types";
 
 const statusColors = {
   current: "bg-green-100 text-green-800",
@@ -29,13 +25,34 @@ const disciplineColors = {
 };
 
 export default function Drawings() {
-  const { data: drawings, isLoading } = useDrawings();
+  const { currentOrgId } = useAuth();
+  const [drawings, setDrawings] = useState<API.Drawing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [disciplineFilter, setDisciplineFilter] = useState<string>("all");
+  const [selectedProject, setSelectedProject] = useState<string>("all");
 
-  const filteredDrawings = drawings?.filter((d) => {
+  useEffect(() => {
+    const fetchDrawings = async () => {
+      if (!currentOrgId) return;
+      
+      setIsLoading(true);
+      try {
+        // For now, show empty state since we need a project context
+        setDrawings([]);
+      } catch (error) {
+        console.error('Error fetching drawings:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDrawings();
+  }, [currentOrgId, selectedProject]);
+
+  const filteredDrawings = drawings.filter((d) => {
     const matchesSearch =
-      d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.number.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDiscipline = disciplineFilter === "all" || d.discipline === disciplineFilter;
     return matchesSearch && matchesDiscipline;
@@ -44,7 +61,7 @@ export default function Drawings() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center text-[var(--vb-neutral-600)]">Loading...</div>
+        <div className="text-center text-neutral-600">Loading...</div>
       </div>
     );
   }
@@ -74,22 +91,21 @@ export default function Drawings() {
               className="pl-10"
             />
           </div>
-          <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Disciplines</SelectItem>
-              <SelectItem value="architectural">Architectural</SelectItem>
-              <SelectItem value="structural">Structural</SelectItem>
-              <SelectItem value="mechanical">Mechanical</SelectItem>
-              <SelectItem value="electrical">Electrical</SelectItem>
-              <SelectItem value="plumbing">Plumbing</SelectItem>
-            </SelectContent>
+          <Select
+            value={disciplineFilter}
+            onChange={(e) => setDisciplineFilter(e.target.value)}
+            className="w-48"
+          >
+            <option value="all">All Disciplines</option>
+            <option value="architectural">Architectural</option>
+            <option value="structural">Structural</option>
+            <option value="mechanical">Mechanical</option>
+            <option value="electrical">Electrical</option>
+            <option value="plumbing">Plumbing</option>
           </Select>
         </div>
 
-        {filteredDrawings && filteredDrawings.length > 0 ? (
+        {filteredDrawings.length > 0 ? (
           <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
             <table className="min-w-full divide-y divide-neutral-200">
               <thead className="bg-neutral-50">
@@ -120,23 +136,21 @@ export default function Drawings() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <ImageIcon size={20} className="text-neutral-400" />
-                        <span className="text-sm font-medium text-neutral-900">{drawing.name}</span>
+                        <span className="text-sm font-medium text-neutral-900">{drawing.title || drawing.number}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-mono text-neutral-900">{drawing.number}</td>
                     <td className="px-6 py-4">
-                      <Badge className={disciplineColors[drawing.discipline]}>
-                        {drawing.discipline}
+                      <Badge>
+                        {drawing.discipline || 'N/A'}
                       </Badge>
                     </td>
                     <td className="px-6 py-4">
-                      <Badge className={statusColors[drawing.status]}>
-                        {drawing.status.replace("-", " ")}
-                      </Badge>
+                      <Badge>Current</Badge>
                     </td>
-                    <td className="px-6 py-4 text-sm text-neutral-600">{drawing.version}</td>
+                    <td className="px-6 py-4 text-sm text-neutral-600">{drawing.currentVersion || 1}</td>
                     <td className="px-6 py-4 text-sm text-neutral-600">
-                      {new Date(drawing.uploadedAt).toLocaleDateString()}
+                      {drawing.createdAt ? new Date(drawing.createdAt).toLocaleDateString() : 'N/A'}
                     </td>
                   </tr>
                 ))}
