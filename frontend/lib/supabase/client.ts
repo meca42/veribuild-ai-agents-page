@@ -11,7 +11,25 @@ export function createBrowserClient(): SupabaseClient | null {
       console.error('[Supabase] Not configured: SUPABASE_URL or SUPABASE_ANON_KEY missing.');
       return null;
     }
-    _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    console.log('[Supabase] Creating client with URL:', SUPABASE_URL);
+    
+    _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      db: {
+        schema: 'public',
+      },
+      global: {
+        headers: {
+          'x-application-name': 'veribuild',
+        },
+      },
+    });
+    
+    console.log('[Supabase] Client created successfully');
   }
   
   return _client;
