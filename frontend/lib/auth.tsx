@@ -49,46 +49,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Loading user orgs for:', userId);
       console.log('[Auth] Starting org_members query...');
       
-      const { data, error } = await supabase
+      // First get org_members
+      const { data: members, error: membersError } = await supabase
         .from('org_members')
-        .select(`
-          id,
-          org_id,
-          role,
-          org:orgs!inner (
-            id,
-            name
-          )
-        `)
+        .select('id, org_id, role')
         .eq('user_id', userId);
 
-      console.log('[Auth] Query completed. Data:', data, 'Error:', error);
+      console.log('[Auth] org_members query completed. Data:', members, 'Error:', membersError);
 
-      if (error) {
-        console.error('[Auth] Error loading orgs:', error);
+      if (membersError) {
+        console.error('[Auth] Error loading org members:', membersError);
         return;
       }
 
-      console.log('[Auth] Orgs loaded:', data?.length || 0);
-
-      if (data) {
-        const formattedOrgs = data.map((item: any) => ({
-          id: item.id,
-          org_id: item.org_id,
-          role: item.role,
-          org: Array.isArray(item.org) ? item.org[0] : item.org
-        }));
-        
-        console.log('[Auth] Formatted orgs:', formattedOrgs);
-        setOrganizations(formattedOrgs as OrgMember[]);
-        
-        const savedOrgId = localStorage.getItem('currentOrgId');
-        if (savedOrgId && formattedOrgs.some((m: any) => m.org_id === savedOrgId)) {
-          setCurrentOrgId(savedOrgId);
-        } else if (formattedOrgs.length > 0) {
-          setCurrentOrgId(formattedOrgs[0].org_id);
-        }
+      if (!members || members.length === 0) {
+        console.log('[Auth] No org memberships found');
+        setOrganizations([]);
+        return;
       }
+
+      // Then get the org details
+      const orgIds = members.map(m => m.org_id);
+      console.log('[Auth] Fetching orgs:', orgIds);
+      
+      const { data: orgs, error: orgsError } = await supabase
+        .from('orgs')
+        .select('id, name')
+        .in('id', orgIds);
+
+      console.log('[Auth] orgs query completed. Data:', orgs, 'Error:', orgsError);
+
+      if (orgsError) {
+        console.error('[Auth] Error loading orgs:', orgsError);
+        return;
+      }
+
+      // Combine the data
+      const formattedOrgs = members.map((member: any) => {
+        const org = orgs?.find(o => o.id === member.org_id);
+        return {
+          id: member.id,
+          org_id: member.org_id,
+          role: member.role,
+          org: org || { id: member.org_id, name: 'Unknown' }
+        };
+      });
+      
+      console.log('[Auth] Formatted orgs:', formattedOrgs);
+      setOrganizations(formattedOrgs as OrgMember[]);
+      
+      const savedOrgId = localStorage.getItem('currentOrgId');
+      if (savedOrgId && formattedOrgs.some((m: any) => m.org_id === savedOrgId)) {
+        setCurrentOrgId(savedOrgId);
+      } else if (formattedOrgs.length > 0) {
+        setCurrentOrgId(formattedOrgs[0].org_id);
+      }
+      
+      console.log('[Auth] Orgs loaded successfully:', formattedOrgs.length);
     } catch (error) {
       console.error('[Auth] Exception loading orgs:', error);
     }
