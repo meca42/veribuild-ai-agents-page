@@ -179,12 +179,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    // Safety timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      console.warn('[Auth] Initialization timed out after 10s');
-      setIsLoading(false);
-    }, 10000);
-    
     const initAuth = async () => {
       try {
         console.log('[Auth] Initializing auth...');
@@ -192,7 +186,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (error) {
           console.error('[Auth] Error getting session:', error);
-          clearTimeout(timeout);
           setIsLoading(false);
           return;
         }
@@ -200,6 +193,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           console.log('[Auth] User session found:', session.user.id);
           setUser(session.user);
+          
+          // Wait for both to complete before setting isLoading to false
           await Promise.all([
             loadUserOrgs(session.user.id),
             loadUserProfile(session.user.id)
@@ -208,12 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[Auth] No active session');
         }
         
-        clearTimeout(timeout);
         setIsLoading(false);
         console.log('[Auth] Initialization complete');
       } catch (error) {
         console.error('[Auth] Error during initialization:', error);
-        clearTimeout(timeout);
         setIsLoading(false);
       }
     };
