@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +9,8 @@ import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
 import { useProjects } from "@/lib/hooks";
 import { useToast } from "@/components/ui/Toast";
+import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
   planning: "info",
@@ -22,8 +24,11 @@ export default function ProjectsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [isCreating, setIsCreating] = useState(false);
   
-  const { data: projects, total, isLoading, isError, error } = useProjects({
+  const navigate = useNavigate();
+  const { currentOrgId } = useAuth();
+  const { data: projects, total, isLoading, isError, error, refetch } = useProjects({
     q: searchQuery,
     sortBy,
     sortDir,
@@ -32,6 +37,29 @@ export default function ProjectsList() {
   });
 
   const { addToast } = useToast();
+
+  const handleCreateProject = async () => {
+    if (!currentOrgId) {
+      addToast('No organization selected', 'error');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const project = await api.createProject(currentOrgId, {
+        name: 'New Project',
+        status: 'planning',
+      });
+      addToast('Project created successfully', 'success');
+      await refetch();
+      navigate(`/projects/${project.id}`);
+    } catch (err: any) {
+      console.error('Failed to create project:', err);
+      addToast(err.message || 'Failed to create project', 'error');
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   if (isError && error) {
     addToast(error.message, 'error');
@@ -54,9 +82,9 @@ export default function ProjectsList() {
         title="Projects"
         description="Manage your construction projects"
         actions={
-          <Button variant="primary">
+          <Button variant="primary" onClick={handleCreateProject} disabled={isCreating}>
             <Plus className="h-5 w-5" />
-            New Project
+            {isCreating ? 'Creating...' : 'New Project'}
           </Button>
         }
       />
@@ -142,7 +170,7 @@ export default function ProjectsList() {
             title="No projects found"
             description="No projects match your search criteria. Try adjusting your filters or create a new project."
             actionLabel="Create Project"
-            onAction={() => {}}
+            onAction={handleCreateProject}
           />
         )}
 
