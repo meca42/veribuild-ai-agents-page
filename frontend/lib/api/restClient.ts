@@ -117,7 +117,7 @@ export const listPhases = async (projectId: string): Promise<API.Phase[]> => {
     .from('phases')
     .select('*')
     .eq('project_id', projectId)
-    .order('order', { ascending: true });
+    .order('sequence', { ascending: true });
 
   if (error) throw error;
   return (data || []).map(mapPhase);
@@ -138,10 +138,10 @@ export const createPhase = async (projectId: string, data: Partial<API.Phase>): 
       name: data.name || 'Untitled Phase',
       description: data.description,
       status: data.status || 'not_started',
-      order: data.order !== undefined ? data.order : (count || 0),
+      sequence: data.order !== undefined ? data.order : (count || 0),
       progress: data.progress || 0,
-      start_date: data.startDate,
-      end_date: data.endDate,
+      planned_start: data.startDate,
+      planned_end: data.endDate,
     })
     .select()
     .single();
@@ -152,17 +152,19 @@ export const createPhase = async (projectId: string, data: Partial<API.Phase>): 
 
 export const updatePhase = async (id: string, data: Partial<API.Phase>): Promise<API.Phase> => {
   const supabase = getSupabase();
+  const updateData: any = {};
+  
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.order !== undefined) updateData.sequence = data.order;
+  if (data.progress !== undefined) updateData.progress = data.progress;
+  if (data.startDate !== undefined) updateData.planned_start = data.startDate;
+  if (data.endDate !== undefined) updateData.planned_end = data.endDate;
+
   const { data: phase, error } = await supabase
     .from('phases')
-    .update({
-      name: data.name,
-      description: data.description,
-      status: data.status,
-      order: data.order,
-      progress: data.progress,
-      start_date: data.startDate,
-      end_date: data.endDate,
-    })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
@@ -178,7 +180,7 @@ export const reorderPhases = async (projectId: string, phaseIds: string[]): Prom
     phaseIds.map((phaseId, index) =>
       supabase
         .from('phases')
-        .update({ order: index })
+        .update({ sequence: index })
         .eq('id', phaseId)
         .eq('project_id', projectId)
     )
@@ -190,15 +192,19 @@ export const listSteps = async (projectId: string, params: FilterParams = {}): P
   
   let query = supabase
     .from('steps')
-    .select('*', { count: 'exact' })
-    .eq('project_id', projectId);
+    .select(`
+      *,
+      phase:phases!inner(project_id),
+      checkitems:step_checkitems(*)
+    `, { count: 'exact' })
+    .eq('phase.project_id', projectId);
 
   if (params.phaseId) {
     query = query.eq('phase_id', params.phaseId);
   }
 
   if (params.q) {
-    query = query.or(`name.ilike.%${params.q}%,description.ilike.%${params.q}%,assignee.ilike.%${params.q}%`);
+    query = query.or(`title.ilike.%${params.q}%,description.ilike.%${params.q}%`);
   }
 
   if (params.status) {
@@ -207,6 +213,8 @@ export const listSteps = async (projectId: string, params: FilterParams = {}): P
 
   if (params.sortBy) {
     query = query.order(params.sortBy, { ascending: params.sortDir !== 'desc' });
+  } else {
+    query = query.order('order_index', { ascending: true });
   }
 
   const limit = params.limit || 20;
@@ -228,7 +236,10 @@ export const getStep = async (id: string): Promise<API.Step> => {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('steps')
-    .select('*')
+    .select(`
+      *,
+      checkitems:step_checkitems(*)
+    `)
     .eq('id', id)
     .single();
 
@@ -238,70 +249,143 @@ export const getStep = async (id: string): Promise<API.Step> => {
 
 export const createStep = async (projectId: string, phaseId: string, data: Partial<API.Step>): Promise<API.Step> => {
   const supabase = getSupabase();
+  
+  const { count } = await supabase
+    .from('steps')
+    .select('*', { count: 'exact', head: true })
+    .eq('phase_id', phaseId);
+
   const { data: step, error } = await supabase
     .from('steps')
     .insert({
-      project_id: projectId,
       phase_id: phaseId,
-      name: data.name || 'Untitled Step',
+      title: data.name || 'Untitled Step',
       description: data.description,
       status: data.status || 'todo',
-      assignee: data.assignee,
-      due_date: data.dueDate,
-      checklist: data.checklist || [],
-      tags: data.tags || [],
+      assignee_id: data.assignee,
+      planned_end: data.dueDate,
+      order_index: count || 0,
+      meta: {
+        tags: data.tags || [],
+      },
     })
-    .select()
+    .select(`
+      *,
+      checkitems:step_checkitems(*)
+    `)
     .single();
 
   if (error) throw error;
+  
+  if (data.checklist && data.checklist.length > 0) {
+    const checkitems = data.checklist.map((item, index) => ({
+      step_id: step.id,
+      label: item.text,
+      is_done: item.checked,
+      order_index: index,
+    }));
+    
+    await supabase.from('step_checkitems').insert(checkitems);
+    
+    const { data: updatedStep } = await supabase
+      .from('steps')
+      .select(`
+        *,
+        checkitems:step_checkitems(*)
+      `)
+      .eq('id', step.id)
+      .single();
+    
+    return mapStep(updatedStep);
+  }
+  
   return mapStep(step);
 };
 
 export const updateStep = async (id: string, data: Partial<API.Step>): Promise<API.Step> => {
   const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.title = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.assignee !== undefined) updateData.assignee_id = data.assignee;
+  if (data.dueDate !== undefined) updateData.planned_end = data.dueDate;
+  if (data.tags !== undefined) {
+    updateData.meta = { tags: data.tags };
+  }
+
   const { data: step, error } = await supabase
     .from('steps')
-    .update({
-      name: data.name,
-      description: data.description,
-      status: data.status,
-      assignee: data.assignee,
-      due_date: data.dueDate,
-      checklist: data.checklist,
-      tags: data.tags,
-    })
+    .update(updateData)
     .eq('id', id)
-    .select()
+    .select(`
+      *,
+      checkitems:step_checkitems(*)
+    `)
     .single();
 
   if (error) throw error;
+  
+  if (data.checklist !== undefined) {
+    await supabase.from('step_checkitems').delete().eq('step_id', id);
+    
+    if (data.checklist.length > 0) {
+      const checkitems = data.checklist.map((item, index) => ({
+        step_id: id,
+        label: item.text,
+        is_done: item.checked,
+        order_index: index,
+      }));
+      
+      await supabase.from('step_checkitems').insert(checkitems);
+    }
+    
+    const { data: updatedStep } = await supabase
+      .from('steps')
+      .select(`
+        *,
+        checkitems:step_checkitems(*)
+      `)
+      .eq('id', id)
+      .single();
+    
+    return mapStep(updatedStep);
+  }
+  
   return mapStep(step);
 };
 
 export const toggleCheckItem = async (stepId: string, checkItemId: string): Promise<API.Step> => {
   const supabase = getSupabase();
-  const { data: step } = await supabase
-    .from('steps')
-    .select('checklist')
-    .eq('id', stepId)
+  
+  const { data: checkitem } = await supabase
+    .from('step_checkitems')
+    .select('is_done')
+    .eq('id', checkItemId)
     .single();
 
-  if (!step) throw new Error('Step not found');
+  if (!checkitem) throw new Error('Check item not found');
 
-  const checklist = (step.checklist as API.ChecklistItem[]).map(item =>
-    item.id === checkItemId ? { ...item, checked: !item.checked } : item
-  );
+  await supabase
+    .from('step_checkitems')
+    .update({ 
+      is_done: !checkitem.is_done,
+      done_at: !checkitem.is_done ? new Date().toISOString() : null,
+    })
+    .eq('id', checkItemId);
 
-  const { data: updated, error } = await supabase
+  const { data: step, error } = await supabase
     .from('steps')
-    .update({ checklist })
+    .select(`
+      *,
+      checkitems:step_checkitems(*)
+    `)
     .eq('id', stepId)
-    .select()
     .single();
 
   if (error) throw error;
-  return mapStep(updated);
+  return mapStep(step);
 };
 
 export const listFiles = async (orgId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.File>> => {
@@ -317,11 +401,13 @@ export const listFiles = async (orgId: string, params: FilterParams = {}): Promi
   }
 
   if (params.q) {
-    query = query.or(`name.ilike.%${params.q}%,type.ilike.%${params.q}%`);
+    query = query.or(`path.ilike.%${params.q}%,mime_type.ilike.%${params.q}%`);
   }
 
   if (params.sortBy) {
     query = query.order(params.sortBy, { ascending: params.sortDir !== 'desc' });
+  } else {
+    query = query.order('uploaded_at', { ascending: false });
   }
 
   const limit = params.limit || 20;
@@ -354,29 +440,48 @@ export const getFile = async (id: string): Promise<API.File> => {
 export const uploadFiles = async (
   orgId: string,
   projectId: string | undefined,
-  files: Array<{ name: string; size: number; type: string }>
+  files: Array<{ name: string; size: number; type: string; file: File }>
 ): Promise<API.File[]> => {
   const supabase = getSupabase();
-  
-  const fileRecords = files.map(file => ({
-    org_id: orgId,
-    project_id: projectId,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    url: `/files/${crypto.randomUUID()}`,
-    status: 'ready',
-    uploaded_by: 'Current User',
-    tags: [],
-  }));
+  const uploadedFiles: API.File[] = [];
 
-  const { data, error } = await supabase
-    .from('files')
-    .insert(fileRecords)
-    .select();
+  for (const fileInfo of files) {
+    const bucket = 'documents';
+    const fileName = `${orgId}/${projectId || 'general'}/${Date.now()}_${fileInfo.name}`;
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, fileInfo.file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
 
-  if (error) throw error;
-  return (data || []).map(mapFile);
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
+
+    const { data: fileRecord, error: insertError } = await supabase
+      .from('files')
+      .insert({
+        org_id: orgId,
+        project_id: projectId,
+        bucket,
+        path: fileName,
+        mime_type: fileInfo.type,
+        size_bytes: fileInfo.size,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    uploadedFiles.push(mapFile({ ...fileRecord, url: urlData.publicUrl }));
+  }
+
+  return uploadedFiles;
 };
 
 const mapProject = (data: any): API.Project => ({
@@ -401,42 +506,62 @@ const mapPhase = (data: any): API.Phase => ({
   name: data.name,
   description: data.description,
   status: data.status,
-  order: data.order,
-  progress: data.progress,
-  startDate: data.start_date ? new Date(data.start_date) : undefined,
-  endDate: data.end_date ? new Date(data.end_date) : undefined,
+  order: data.sequence,
+  progress: data.progress || 0,
+  startDate: data.planned_start ? new Date(data.planned_start) : undefined,
+  endDate: data.planned_end ? new Date(data.planned_end) : undefined,
   createdAt: new Date(data.created_at),
   updatedAt: new Date(data.updated_at),
 });
 
-const mapStep = (data: any): API.Step => ({
-  id: data.id,
-  projectId: data.project_id,
-  phaseId: data.phase_id,
-  name: data.name,
-  description: data.description,
-  status: data.status,
-  assignee: data.assignee,
-  dueDate: data.due_date ? new Date(data.due_date) : undefined,
-  checklist: data.checklist || [],
-  tags: data.tags || [],
-  createdAt: new Date(data.created_at),
-  updatedAt: new Date(data.updated_at),
-});
+const mapStep = (data: any): API.Step => {
+  const checkitems = (data.checkitems || []).map((item: any) => ({
+    id: item.id,
+    text: item.label,
+    checked: item.is_done || false,
+  }));
 
-const mapFile = (data: any): API.File => ({
-  id: data.id,
-  orgId: data.org_id,
-  projectId: data.project_id,
-  name: data.name,
-  size: data.size,
-  type: data.type,
-  url: data.url,
-  status: data.status,
-  uploadedBy: data.uploaded_by,
-  uploadedAt: new Date(data.uploaded_at || data.created_at),
-  tags: data.tags || [],
-});
+  return {
+    id: data.id,
+    projectId: data.phase?.project_id || '',
+    phaseId: data.phase_id,
+    name: data.title,
+    description: data.description,
+    status: data.status,
+    assignee: data.assignee_id,
+    dueDate: data.planned_end ? new Date(data.planned_end) : undefined,
+    checklist: checkitems,
+    tags: data.meta?.tags || [],
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at),
+  };
+};
+
+const mapFile = (data: any): API.File => {
+  const supabase = createBrowserClient();
+  let url = data.url;
+  
+  if (!url && data.bucket && data.path && supabase) {
+    const { data: urlData } = supabase.storage.from(data.bucket).getPublicUrl(data.path);
+    url = urlData.publicUrl;
+  }
+
+  const fileName = data.path?.split('/').pop() || 'unknown';
+  
+  return {
+    id: data.id,
+    orgId: data.org_id,
+    projectId: data.project_id,
+    name: fileName,
+    size: data.size_bytes || 0,
+    type: data.mime_type || 'application/octet-stream',
+    url: url || '',
+    status: 'ready',
+    uploadedBy: data.uploaded_by || 'Unknown',
+    uploadedAt: new Date(data.uploaded_at),
+    tags: data.meta?.tags || [],
+  };
+};
 
 export const listDrawings = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Drawing>> => {
   throw new Error('Not implemented - use mock client');
