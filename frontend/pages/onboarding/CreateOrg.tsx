@@ -38,7 +38,12 @@ export default function CreateOrg() {
         .select()
         .single();
 
-      if (orgError) throw orgError;
+      if (orgError) {
+        console.error('Org creation error:', orgError);
+        throw orgError;
+      }
+
+      console.log('Org created:', org);
 
       const { error: memberError } = await supabase
         .from('org_members')
@@ -48,7 +53,12 @@ export default function CreateOrg() {
           role: 'owner',
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Member creation error:', memberError);
+        throw memberError;
+      }
+
+      console.log('Member created successfully');
 
       await refreshOrgs();
       setCurrentOrgId(org.id);
@@ -57,6 +67,12 @@ export default function CreateOrg() {
       navigate('/projects');
     } catch (error: any) {
       console.error('Create org error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       addToast(error.message || 'Failed to create organization', 'error');
     } finally {
       setIsLoading(false);
