@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { FormRow } from "@/components/ui/FormRow";
 import { Select } from "@/components/ui/Select";
+import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+import type * as API from "@/lib/api/types";
 
 interface UploadDrawingModalProps {
   isOpen: boolean;
@@ -14,6 +17,7 @@ interface UploadDrawingModalProps {
 }
 
 export interface DrawingFormData {
+  projectId: string;
   number: string;
   title?: string;
   discipline?: string;
@@ -22,17 +26,42 @@ export interface DrawingFormData {
 }
 
 export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoading }: UploadDrawingModalProps) {
+  const { currentOrgId } = useAuth();
+  const [projects, setProjects] = useState<API.Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [formData, setFormData] = useState<DrawingFormData>({
+    projectId: '',
     number: '',
     file: null,
   });
 
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!currentOrgId || !isOpen) return;
+      
+      setLoadingProjects(true);
+      try {
+        const response = await api.listProjects(currentOrgId, { pageSize: 100 });
+        setProjects(response.data);
+        if (response.data.length > 0 && !formData.projectId) {
+          setFormData(prev => ({ ...prev, projectId: response.data[0].id }));
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    loadProjects();
+  }, [currentOrgId, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.number.trim() || !formData.file) return;
+    if (!formData.projectId || !formData.number.trim() || !formData.file) return;
     
     await onSubmit(formData);
-    setFormData({ number: '', file: null });
+    setFormData({ projectId: '', number: '', file: null });
   };
 
   const handleChange = (field: keyof DrawingFormData, value: any) => {
@@ -48,6 +77,22 @@ export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoadin
     >
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
+          <FormRow label="Project" required>
+            <Select
+              value={formData.projectId}
+              onChange={(e) => handleChange('projectId', e.target.value)}
+              required
+              disabled={loadingProjects}
+            >
+              <option value="">Select project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          </FormRow>
+
           <FormRow label="Drawing File" required>
             <div className="space-y-2">
               <Input
@@ -112,7 +157,7 @@ export default function UploadDrawingModal({ isOpen, onClose, onSubmit, isLoadin
           <Button type="button" variant="secondary" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={!formData.number.trim() || !formData.file || isLoading}>
+          <Button type="submit" variant="primary" disabled={!formData.projectId || !formData.number.trim() || !formData.file || isLoading}>
             {isLoading ? 'Uploading...' : 'Upload Drawing'}
           </Button>
         </div>

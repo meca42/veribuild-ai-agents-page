@@ -43,8 +43,42 @@ export default function Drawings() {
       
       setIsLoading(true);
       try {
-        // For now, show empty state since we need a project context
-        setDrawings([]);
+        const supabase = (await import('@/lib/supabase/client')).createBrowserClient();
+        if (!supabase) throw new Error('Supabase not configured');
+
+        const { data: projectsData } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('org_id', currentOrgId);
+
+        if (!projectsData || projectsData.length === 0) {
+          setDrawings([]);
+          return;
+        }
+
+        const projectIds = projectsData.map(p => p.id);
+        
+        const { data, error } = await supabase
+          .from('drawings')
+          .select('*')
+          .in('project_id', projectIds)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        setDrawings((data || []).map(d => ({
+          id: d.id,
+          projectId: d.project_id,
+          discipline: d.discipline || '',
+          number: d.number,
+          title: d.title || '',
+          status: 'approved' as const,
+          currentVersion: d.current_version || 1,
+          currentRevision: '1',
+          versions: [],
+          createdAt: new Date(d.created_at),
+          updatedAt: new Date(d.updated_at || d.created_at),
+        })));
       } catch (error) {
         console.error('Error fetching drawings:', error);
       } finally {
@@ -56,17 +90,89 @@ export default function Drawings() {
   }, [currentOrgId, selectedProject]);
 
   const handleUploadDrawing = async (formData: DrawingFormData) => {
-    if (!currentOrgId || !formData.file) {
+    if (!currentOrgId || !formData.file || !formData.projectId) {
       addToast('Missing required data', 'error');
       return;
     }
 
     setIsUploading(true);
     try {
-      // TODO: Implement file upload to Supabase Storage and create drawing record
-      addToast('Drawing upload not yet implemented', 'info');
-      console.log('Upload drawing:', formData);
+      const supabase = (await import('@/lib/supabase/client')).createBrowserClient();
+      if (!supabase) throw new Error('Supabase not configured');
+
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExt = formData.file.name.split('.').pop();
+      const fileName = `${formData.projectId}/${Date.now()}-${formData.number.replace(/[^a-zA-Z0-9]/g, '_')}.${fileExt}`;
+      const storagePath = `${currentOrgId}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('drawings')
+        .upload(storagePath, formData.file, {
+          contentType: formData.file.type,
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: fileRecord, error: fileError } = await supabase
+        .from('files')
+        .insert({
+          org_id: currentOrgId,
+          project_id: formData.projectId,
+          bucket: 'drawings',
+          path: storagePath,
+          mime_type: formData.file.type,
+          size_bytes: formData.file.size,
+          uploaded_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (fileError) throw fileError;
+
+      const { data: drawing, error: drawingError } = await supabase
+        .from('drawings')
+        .insert({
+          project_id: formData.projectId,
+          discipline: formData.discipline || null,
+          number: formData.number,
+          title: formData.title || null,
+          current_version: 1,
+        })
+        .select()
+        .single();
+
+      if (drawingError) throw drawingError;
+
+      const { error: versionError } = await supabase
+        .from('drawing_versions')
+        .insert({
+          drawing_id: drawing.id,
+          version: 1,
+          file_id: fileRecord.id,
+          notes: formData.description || null,
+        });
+
+      if (versionError) throw versionError;
+
+      addToast('Drawing uploaded successfully', 'success');
       setIsModalOpen(false);
+      
+      setDrawings(prev => [...prev, {
+        id: drawing.id,
+        projectId: formData.projectId,
+        discipline: formData.discipline || '',
+        number: formData.number,
+        title: formData.title || '',
+        status: 'approved' as const,
+        currentVersion: 1,
+        currentRevision: '1',
+        versions: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }]);
     } catch (err: any) {
       console.error('Failed to upload drawing:', err);
       addToast(err.message || 'Failed to upload drawing', 'error');
