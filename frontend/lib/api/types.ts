@@ -7,9 +7,10 @@ export type DocumentStatus = 'draft' | 'under_review' | 'approved' | 'archived';
 export type RFIStatus = 'open' | 'answered' | 'closed';
 export type SubmittalStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'resubmit';
 export type SubmittalItemStatus = 'pending' | 'approved' | 'rejected' | 'n/a';
-export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
-export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
-export type InspectionStatus = 'scheduled' | 'in_progress' | 'passed' | 'failed' | 'n/a';
+export type IssueType = 'defect' | 'safety' | 'coordination' | 'other';
+export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'verified' | 'closed';
+export type InspectionStatus = 'scheduled' | 'in_progress' | 'passed' | 'failed' | 'closed';
+export type InspectionItemResult = 'pass' | 'fail' | 'n/a';
 export type AgentStatus = 'active' | 'paused' | 'archived';
 export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -248,33 +249,53 @@ export interface InventoryLot {
   updatedAt: Date;
 }
 
+export interface IssueAttachment {
+  id: string;
+  issueId: string;
+  fileId: string;
+  fileName: string;
+  fileUrl: string;
+  createdAt: Date;
+}
+
 export interface Issue {
   id: string;
   projectId: string;
   stepId?: string;
   title: string;
-  description: string;
+  description?: string;
+  type: IssueType;
   status: IssueStatus;
-  priority: IssuePriority;
-  assignedTo?: string;
-  reportedBy: string;
-  reportedAt: Date;
-  resolvedAt?: Date;
-  resolution?: string;
-  tags: string[];
+  priority: number;
+  dueDate?: Date;
+  assigneeId?: string;
+  createdBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  attachments?: IssueAttachment[];
+}
+
+export interface InspectionItem {
+  id: string;
+  inspectionId: string;
+  label: string;
+  result: InspectionItemResult;
+  notes?: string;
+  orderIndex: number;
 }
 
 export interface Inspection {
   id: string;
   projectId: string;
-  stepId?: string;
-  type: string;
-  scheduledDate: Date;
-  inspector?: string;
+  name: string;
   status: InspectionStatus;
-  result?: string;
-  notes?: string;
-  completedAt?: Date;
+  scheduledAt?: Date;
+  performedAt?: Date;
+  performedBy?: string;
+  meta: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  items?: InspectionItem[];
 }
 
 export interface Agent {

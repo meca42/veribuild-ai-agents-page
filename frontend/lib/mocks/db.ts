@@ -53,10 +53,11 @@ const documentStatuses: API.DocumentStatus[] = ['draft', 'under_review', 'approv
 const rfiStatuses: API.RFIStatus[] = ['open', 'answered', 'closed'];
 const submittalTypes = ['Shop Drawing', 'Product Data', 'Sample', 'Test Report', 'Closeout'];
 const submittalStatuses: API.SubmittalStatus[] = ['draft', 'submitted', 'approved', 'rejected', 'resubmit'];
-const priorities: API.IssuePriority[] = ['low', 'medium', 'high', 'critical'];
-const issueStatuses: API.IssueStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
-const inspectionTypes = ['Foundation', 'Framing', 'Electrical', 'Plumbing', 'HVAC', 'Final'];
-const inspectionStatuses: API.InspectionStatus[] = ['scheduled', 'in_progress', 'passed', 'failed', 'n/a'];
+const issueTypes: API.IssueType[] = ['defect', 'safety', 'coordination', 'other'];
+const issueStatuses: API.IssueStatus[] = ['open', 'in_progress', 'resolved', 'verified', 'closed'];
+const inspectionStatuses: API.InspectionStatus[] = ['scheduled', 'in_progress', 'passed', 'failed', 'closed'];
+const inspectionNames = ['Foundation Inspection', 'Framing Inspection', 'Electrical Rough-In', 'Plumbing Rough-In', 'HVAC Inspection', 'Final Walkthrough'];
+const inspectionItemLabels = ['Foundation level', 'Rebar placement', 'Concrete strength', 'Formwork alignment', 'Waterproofing', 'Anchor bolts'];
 const agentTools = ['search_documents', 'query_database', 'send_notification', 'create_task', 'analyze_drawing'];
 
 const generateOrganizations = (): API.Organization[] => {
@@ -330,20 +331,22 @@ const generateIssues = (projectId: string, stepIds: string[], count: number): AP
   return Array.from({ length: count }, () => {
     const status = randomElement(issueStatuses);
     const createdAt = randomPastDate(60);
+    const type = randomElement(issueTypes);
     return {
       id: generateId('issue'),
       projectId,
       stepId: Math.random() > 0.3 ? randomElement(stepIds) : undefined,
       title: faker.company.catchPhrase(),
-      description: faker.lorem.paragraph(),
+      description: Math.random() > 0.2 ? faker.lorem.paragraph() : undefined,
+      type,
       status,
-      priority: randomElement(priorities),
-      assignedTo: Math.random() > 0.2 ? faker.person.fullName() : undefined,
-      reportedBy: faker.person.fullName(),
-      reportedAt: createdAt,
-      resolvedAt: status === 'resolved' || status === 'closed' ? randomDate(createdAt, new Date()) : undefined,
-      resolution: status === 'resolved' || status === 'closed' ? faker.lorem.sentence() : undefined,
-      tags: randomElements(['safety', 'quality', 'design', 'coordination', 'schedule'], randomInt(0, 3)),
+      priority: randomInt(1, 5),
+      dueDate: Math.random() > 0.5 ? randomFutureDate(30) : undefined,
+      assigneeId: Math.random() > 0.2 ? faker.person.fullName() : undefined,
+      createdBy: faker.person.fullName(),
+      createdAt,
+      updatedAt: new Date(),
+      attachments: [],
     };
   });
 };
@@ -351,18 +354,34 @@ const generateIssues = (projectId: string, stepIds: string[], count: number): AP
 const generateInspections = (projectId: string, stepIds: string[], count: number): API.Inspection[] => {
   return Array.from({ length: count }, () => {
     const status = randomElement(inspectionStatuses);
-    const scheduledDate = randomFutureDate(60);
+    const scheduledAt = Math.random() > 0.3 ? randomFutureDate(60) : undefined;
+    const performedAt = status === 'passed' || status === 'failed' || status === 'closed' ? (scheduledAt ? randomDate(scheduledAt, new Date()) : randomPastDate(30)) : undefined;
+    const itemCount = randomInt(3, 8);
+    
     return {
       id: generateId('inspection'),
       projectId,
-      stepId: Math.random() > 0.4 ? randomElement(stepIds) : undefined,
-      type: randomElement(inspectionTypes),
-      scheduledDate,
-      inspector: Math.random() > 0.3 ? faker.person.fullName() : undefined,
+      name: randomElement(inspectionNames),
       status,
-      result: status === 'passed' || status === 'failed' ? faker.lorem.sentence() : undefined,
-      notes: Math.random() > 0.5 ? faker.lorem.paragraph() : undefined,
-      completedAt: status === 'passed' || status === 'failed' ? randomDate(scheduledDate, new Date()) : undefined,
+      scheduledAt,
+      performedAt,
+      performedBy: performedAt ? faker.person.fullName() : undefined,
+      meta: {
+        location: faker.location.streetAddress(),
+        weather: randomElement(['Clear', 'Cloudy', 'Rainy']),
+      },
+      createdAt: randomPastDate(90),
+      updatedAt: new Date(),
+      items: Array.from({ length: itemCount }, (_, i) => ({
+        id: generateId('item'),
+        inspectionId: generateId('inspection'),
+        label: randomElement(inspectionItemLabels),
+        result: status === 'passed' || status === 'failed' || status === 'closed' 
+          ? randomElement(['pass', 'fail', 'n/a'] as API.InspectionItemResult[])
+          : 'n/a',
+        notes: Math.random() > 0.6 ? faker.lorem.sentence() : undefined,
+        orderIndex: i,
+      })),
     };
   });
 };

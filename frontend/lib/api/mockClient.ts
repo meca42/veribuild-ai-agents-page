@@ -891,6 +891,10 @@ export const listIssues = async (projectId: string, params: FilterParams = {}): 
       issues = issues.filter((i) => i.status === params.status);
     }
 
+    if (params.type) {
+      issues = issues.filter((i) => i.type === params.type);
+    }
+
     if (params.priority) {
       issues = issues.filter((i) => i.priority === params.priority);
     }
@@ -907,6 +911,15 @@ export const listIssues = async (projectId: string, params: FilterParams = {}): 
   });
 };
 
+export const getIssue = async (id: string): Promise<API.Issue> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const issue = db.issues.find((i) => i.id === id);
+    if (!issue) throw new Error('Issue not found');
+    return issue;
+  });
+};
+
 export const createIssue = async (projectId: string, data: Partial<API.Issue>): Promise<API.Issue> => {
   return simulateLatency(() => {
     const db = getDatabase();
@@ -915,15 +928,16 @@ export const createIssue = async (projectId: string, data: Partial<API.Issue>): 
       projectId,
       stepId: data.stepId,
       title: data.title || 'Untitled Issue',
-      description: data.description || '',
+      description: data.description,
+      type: data.type || 'other',
       status: data.status || 'open',
-      priority: data.priority || 'medium',
-      assignedTo: data.assignedTo,
-      reportedBy: data.reportedBy || 'Current User',
-      reportedAt: new Date(),
-      resolvedAt: data.resolvedAt,
-      resolution: data.resolution,
-      tags: data.tags || [],
+      priority: data.priority || 3,
+      dueDate: data.dueDate,
+      assigneeId: data.assigneeId,
+      createdBy: data.createdBy || 'Current User',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      attachments: [],
     };
     db.issues.push(issue);
     return issue;
@@ -939,7 +953,33 @@ export const updateIssue = async (id: string, data: Partial<API.Issue>): Promise
     db.issues[index] = {
       ...db.issues[index],
       ...data,
+      updatedAt: new Date(),
     };
+    return db.issues[index];
+  });
+};
+
+export const addIssueAttachment = async (issueId: string, file: File): Promise<API.Issue> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.issues.findIndex((i) => i.id === issueId);
+    if (index === -1) throw new Error('Issue not found');
+    
+    const attachment: API.IssueAttachment = {
+      id: generateId('attachment'),
+      issueId,
+      fileId: generateId('file'),
+      fileName: file.name,
+      fileUrl: URL.createObjectURL(file),
+      createdAt: new Date(),
+    };
+    
+    if (!db.issues[index].attachments) {
+      db.issues[index].attachments = [];
+    }
+    db.issues[index].attachments!.push(attachment);
+    db.issues[index].updatedAt = new Date();
+    
     return db.issues[index];
   });
 };
@@ -949,16 +989,12 @@ export const listInspections = async (projectId: string, params: FilterParams = 
     const db = getDatabase();
     let inspections = db.inspections.filter((i) => i.projectId === projectId);
 
+    if (params.q) {
+      inspections = applySearch(inspections, params.q, ['name']);
+    }
+
     if (params.status) {
       inspections = inspections.filter((i) => i.status === params.status);
-    }
-
-    if (params.type) {
-      inspections = inspections.filter((i) => i.type === params.type);
-    }
-
-    if (params.stepId) {
-      inspections = inspections.filter((i) => i.stepId === params.stepId);
     }
 
     if (params.sortBy) {
@@ -969,20 +1005,30 @@ export const listInspections = async (projectId: string, params: FilterParams = 
   });
 };
 
+export const getInspection = async (id: string): Promise<API.Inspection> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const inspection = db.inspections.find((i) => i.id === id);
+    if (!inspection) throw new Error('Inspection not found');
+    return inspection;
+  });
+};
+
 export const createInspection = async (projectId: string, data: Partial<API.Inspection>): Promise<API.Inspection> => {
   return simulateLatency(() => {
     const db = getDatabase();
     const inspection: API.Inspection = {
       id: generateId('inspection'),
       projectId,
-      stepId: data.stepId,
-      type: data.type || 'General',
-      scheduledDate: data.scheduledDate || new Date(),
-      inspector: data.inspector,
+      name: data.name || 'Untitled Inspection',
       status: data.status || 'scheduled',
-      result: data.result,
-      notes: data.notes,
-      completedAt: data.completedAt,
+      scheduledAt: data.scheduledAt,
+      performedAt: data.performedAt,
+      performedBy: data.performedBy,
+      meta: data.meta || {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      items: [],
     };
     db.inspections.push(inspection);
     return inspection;
@@ -998,8 +1044,60 @@ export const updateInspection = async (id: string, data: Partial<API.Inspection>
     db.inspections[index] = {
       ...db.inspections[index],
       ...data,
+      updatedAt: new Date(),
     };
     return db.inspections[index];
+  });
+};
+
+export const addInspectionItem = async (
+  inspectionId: string,
+  data: { label: string; orderIndex?: number }
+): Promise<API.InspectionItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.inspections.findIndex((i) => i.id === inspectionId);
+    if (index === -1) throw new Error('Inspection not found');
+
+    const item: API.InspectionItem = {
+      id: generateId('item'),
+      inspectionId,
+      label: data.label,
+      result: 'n/a',
+      notes: undefined,
+      orderIndex: data.orderIndex || 0,
+    };
+
+    if (!db.inspections[index].items) {
+      db.inspections[index].items = [];
+    }
+    db.inspections[index].items!.push(item);
+    db.inspections[index].updatedAt = new Date();
+
+    return item;
+  });
+};
+
+export const updateInspectionItem = async (
+  itemId: string,
+  data: { result?: API.InspectionItemResult; notes?: string }
+): Promise<API.InspectionItem> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    
+    for (const inspection of db.inspections) {
+      if (!inspection.items) continue;
+      
+      const itemIndex = inspection.items.findIndex((item) => item.id === itemId);
+      if (itemIndex !== -1) {
+        if (data.result !== undefined) inspection.items[itemIndex].result = data.result;
+        if (data.notes !== undefined) inspection.items[itemIndex].notes = data.notes;
+        inspection.updatedAt = new Date();
+        return inspection.items[itemIndex];
+      }
+    }
+    
+    throw new Error('Inspection item not found');
   });
 };
 
