@@ -49,11 +49,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Loading user orgs for:', userId);
       console.log('[Auth] Starting org_members query...');
       
+      // Add timeout wrapper
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout')), 5000)
+      );
+      
       // First get org_members
-      const { data: members, error: membersError } = await supabase
+      const membersPromise = supabase
         .from('org_members')
         .select('id, org_id, role')
         .eq('user_id', userId);
+      
+      const { data: members, error: membersError } = await Promise.race([
+        membersPromise,
+        timeout
+      ]) as any;
 
       console.log('[Auth] org_members query completed. Data:', members, 'Error:', membersError);
 
@@ -69,13 +79,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Then get the org details
-      const orgIds = members.map(m => m.org_id);
+      const orgIds = members.map((m: any) => m.org_id);
       console.log('[Auth] Fetching orgs:', orgIds);
       
-      const { data: orgs, error: orgsError } = await supabase
+      const orgsPromise = supabase
         .from('orgs')
         .select('id, name')
         .in('id', orgIds);
+      
+      const timeout2 = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Orgs query timeout')), 5000)
+      );
+      
+      const { data: orgs, error: orgsError } = await Promise.race([
+        orgsPromise,
+        timeout2
+      ]) as any;
 
       console.log('[Auth] orgs query completed. Data:', orgs, 'Error:', orgsError);
 
@@ -86,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Combine the data
       const formattedOrgs = members.map((member: any) => {
-        const org = orgs?.find(o => o.id === member.org_id);
+        const org = orgs?.find((o: any) => o.id === member.org_id);
         return {
           id: member.id,
           org_id: member.org_id,
@@ -108,6 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Orgs loaded successfully:', formattedOrgs.length);
     } catch (error) {
       console.error('[Auth] Exception loading orgs:', error);
+      // Don't let this block the app - set empty orgs
+      setOrganizations([]);
     }
   };
 
@@ -118,11 +139,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Loading user profile for:', userId);
       console.log('[Auth] Starting users query...');
       
-      const { data, error } = await supabase
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile query timeout')), 5000)
+      );
+      
+      const profilePromise = supabase
         .from('users')
         .select('name, avatar_url')
         .eq('id', userId)
         .single();
+      
+      const { data, error } = await Promise.race([
+        profilePromise,
+        timeout
+      ]) as any;
 
       console.log('[Auth] Profile query completed. Data:', data, 'Error:', error);
 
@@ -138,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('[Auth] Exception loading profile:', error);
+      // Don't let this block the app
     }
   };
 
