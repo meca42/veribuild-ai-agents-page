@@ -94,22 +94,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
+      console.log('[Auth] No Supabase client, setting isLoading to false');
       setIsLoading(false);
       return;
     }
     
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        setUser(session.user);
-        await Promise.all([
-          loadUserOrgs(session.user.id),
-          loadUserProfile(session.user.id)
-        ]);
+      try {
+        console.log('[Auth] Initializing auth...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('[Auth] Error getting session:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (session?.user) {
+          console.log('[Auth] User session found:', session.user.id);
+          setUser(session.user);
+          await Promise.all([
+            loadUserOrgs(session.user.id),
+            loadUserProfile(session.user.id)
+          ]);
+        } else {
+          console.log('[Auth] No active session');
+        }
+        
+        setIsLoading(false);
+        console.log('[Auth] Initialization complete');
+      } catch (error) {
+        console.error('[Auth] Error during initialization:', error);
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     };
 
     initAuth();
