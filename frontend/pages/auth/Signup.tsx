@@ -34,12 +34,12 @@ export default function Signup() {
 
     try {
       await signup(name, email, password);
-      addToast('Account created! Please check your email to verify your account.', 'success');
-      navigate('/login');
+      // After successful signup, user might need email verification
+      // The auth state change will handle the redirect automatically
+      addToast('Account created successfully!', 'success');
     } catch (error: any) {
       console.error('Signup error:', error);
       addToast(error.message || 'Failed to create account', 'error');
-    } finally {
       setIsLoading(false);
     }
   };
