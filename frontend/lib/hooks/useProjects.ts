@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth';
-import * as mockClient from '../api/mockClient';
+import { api } from '../api';
 import type * as API from '../api/types';
 import type { FilterParams, PaginatedResponse } from '../mocks/filters';
 
@@ -22,7 +22,7 @@ export const useProjects = (params: FilterParams = {}) => {
     setError(null);
 
     try {
-      const response = await mockClient.listProjects(currentOrgId, { ...params, page, pageSize });
+      const response = await api.listProjects(currentOrgId, { ...params, page, pageSize });
       setData(response.data);
       setTotal(response.total);
     } catch (err) {
@@ -67,7 +67,7 @@ export const useProject = (id: string | undefined) => {
       setError(null);
 
       try {
-        const project = await mockClient.getProject(id);
+        const project = await api.getProject(id);
         setData(project);
       } catch (err) {
         setIsError(true);
@@ -98,7 +98,7 @@ export const useCreateProject = () => {
       setError(null);
 
       try {
-        const project = await mockClient.createProject(currentOrgId, data);
+        const project = await api.createProject(currentOrgId, data);
         return project;
       } catch (err) {
         setIsError(true);
@@ -125,7 +125,7 @@ export const useUpdateProject = () => {
     setError(null);
 
     try {
-      const project = await mockClient.updateProject(id, data);
+      const project = await api.updateProject(id, data);
       return project;
     } catch (err) {
       setIsError(true);
@@ -150,7 +150,7 @@ export const useArchiveProject = () => {
     setError(null);
 
     try {
-      await mockClient.archiveProject(id);
+      await api.archiveProject(id);
     } catch (err) {
       setIsError(true);
       setError(err as Error);

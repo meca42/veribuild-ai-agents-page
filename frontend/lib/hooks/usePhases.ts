@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as mockClient from '../api/mockClient';
+import { api } from '../api';
 import type * as API from '../api/types';
 
 export const usePhases = (projectId: string | undefined) => {
@@ -16,7 +16,7 @@ export const usePhases = (projectId: string | undefined) => {
     setError(null);
 
     try {
-      const phases = await mockClient.listPhases(projectId);
+      const phases = await api.listPhases(projectId);
       setData(phases);
     } catch (err) {
       setIsError(true);
@@ -50,7 +50,7 @@ export const useCreatePhase = () => {
     setError(null);
 
     try {
-      const phase = await mockClient.createPhase(projectId, data);
+      const phase = await api.createPhase(projectId, data);
       return phase;
     } catch (err) {
       setIsError(true);
@@ -75,7 +75,7 @@ export const useUpdatePhase = () => {
     setError(null);
 
     try {
-      const phase = await mockClient.updatePhase(id, data);
+      const phase = await api.updatePhase(id, data);
       return phase;
     } catch (err) {
       setIsError(true);
@@ -100,7 +100,7 @@ export const useReorderPhases = () => {
     setError(null);
 
     try {
-      await mockClient.reorderPhases(projectId, phaseIds);
+      await api.reorderPhases(projectId, phaseIds);
     } catch (err) {
       setIsError(true);
       setError(err as Error);

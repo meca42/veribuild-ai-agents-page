@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as mockClient from '../api/mockClient';
+import { api } from '../api';
 import type * as API from '../api/types';
 import type { FilterParams } from '../mocks/filters';
 
@@ -20,7 +20,7 @@ export const useSteps = (projectId: string | undefined, params: FilterParams = {
     setError(null);
 
     try {
-      const response = await mockClient.listSteps(projectId, { ...params, page, pageSize });
+      const response = await api.listSteps(projectId, { ...params, page, pageSize });
       setData(response.data);
       setTotal(response.total);
     } catch (err) {
@@ -65,7 +65,7 @@ export const useStep = (id: string | undefined) => {
       setError(null);
 
       try {
-        const step = await mockClient.getStep(id);
+        const step = await api.getStep(id);
         setData(step);
       } catch (err) {
         setIsError(true);
@@ -92,7 +92,7 @@ export const useCreateStep = () => {
     setError(null);
 
     try {
-      const step = await mockClient.createStep(projectId, phaseId, data);
+      const step = await api.createStep(projectId, phaseId, data);
       return step;
     } catch (err) {
       setIsError(true);
@@ -117,7 +117,7 @@ export const useUpdateStep = () => {
     setError(null);
 
     try {
-      const step = await mockClient.updateStep(id, data);
+      const step = await api.updateStep(id, data);
       return step;
     } catch (err) {
       setIsError(true);
@@ -142,7 +142,7 @@ export const useToggleCheckItem = () => {
     setError(null);
 
     try {
-      const step = await mockClient.toggleCheckItem(stepId, checkItemId);
+      const step = await api.toggleCheckItem(stepId, checkItemId);
       return step;
     } catch (err) {
       setIsError(true);
