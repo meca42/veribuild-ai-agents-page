@@ -1,33 +1,25 @@
 const m = (typeof import.meta !== 'undefined' ? import.meta.env : undefined) as any;
 const p = (typeof process !== 'undefined' ? process.env : undefined) as any;
 
-// Debug: log all available env values
-if (typeof window !== 'undefined') {
-  console.log('[env.ts] Raw import.meta.env:', m);
-  console.log('[env.ts] VITE_USE_MOCK_API:', m?.VITE_USE_MOCK_API);
-  console.log('[env.ts] VITE_SUPABASE_URL:', m?.VITE_SUPABASE_URL);
-  console.log('[env.ts] VITE_SUPABASE_ANON_KEY:', m?.VITE_SUPABASE_ANON_KEY ? 'set' : 'not set');
-}
+// Fallback hardcoded values (for Leap environment where .env files may not load)
+const FALLBACK_SUPABASE_URL = 'https://lalmleaetmmqsyzvvdzi.supabase.co';
+const FALLBACK_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhbG1sZWFldG1tcXN5enZ2ZHppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2ODcyOTgsImV4cCI6MjA3NTI2MzI5OH0.s6vQGV8H7KNfmQxR6cRp6WoYOPHSri4FLsNkns7WCIw';
+const FALLBACK_USE_MOCK_API = 'false';
 
 export const USE_MOCK_API =
-  (m?.VITE_USE_MOCK_API ?? p?.VITE_USE_MOCK_API ?? m?.USE_MOCK_API ?? p?.USE_MOCK_API ?? 'true').toString() === 'true';
+  (m?.VITE_USE_MOCK_API ?? p?.VITE_USE_MOCK_API ?? m?.USE_MOCK_API ?? p?.USE_MOCK_API ?? FALLBACK_USE_MOCK_API).toString() === 'true';
 
 export const SUPABASE_URL =
-  (m?.VITE_SUPABASE_URL ?? p?.NEXT_PUBLIC_SUPABASE_URL ?? '').trim();
+  (m?.VITE_SUPABASE_URL ?? p?.NEXT_PUBLIC_SUPABASE_URL ?? FALLBACK_SUPABASE_URL).trim();
 
 export const SUPABASE_ANON_KEY =
-  (m?.VITE_SUPABASE_ANON_KEY ?? p?.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+  (m?.VITE_SUPABASE_ANON_KEY ?? p?.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? FALLBACK_SUPABASE_ANON_KEY).trim();
 
 export const SUPABASE_SERVICE_ROLE_KEY =
   (p?.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
 
 if (typeof window !== 'undefined') {
-  if (!USE_MOCK_API && (!SUPABASE_URL || !SUPABASE_ANON_KEY)) {
-    console.warn('[ENV] Missing SUPABASE_URL or SUPABASE_ANON_KEY in browser. Check .env and prefixes (VITE_/NEXT_PUBLIC_).');
-    console.warn('[ENV] SUPABASE_URL:', SUPABASE_URL ? `${SUPABASE_URL.slice(0, 20)}...` : '(empty)');
-    console.warn('[ENV] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? `${SUPABASE_ANON_KEY.slice(0, 20)}...` : '(empty)');
-  }
   console.log('[ENV] USE_MOCK_API:', USE_MOCK_API);
-} else {
-  if (!SUPABASE_URL) console.warn('[ENV] Missing SUPABASE_URL on server.');
+  console.log('[ENV] SUPABASE_URL:', SUPABASE_URL ? `${SUPABASE_URL.slice(0, 30)}...` : '(empty)');
+  console.log('[ENV] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'configured' : '(empty)');
 }
