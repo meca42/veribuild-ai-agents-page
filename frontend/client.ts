@@ -83,7 +83,10 @@ export interface ClientOptions {
  * Import the endpoint handlers to derive the types for the client.
  */
 import { cancelRun as api_agents_cancel_run_cancelRun } from "~backend/agents/cancel-run";
+import { exportRuns as api_agents_export_runs_exportRuns } from "~backend/agents/export-runs";
 import { getRun as api_agents_get_run_getRun } from "~backend/agents/get-run";
+import { listProjectRuns as api_agents_list_project_runs_listProjectRuns } from "~backend/agents/list-project-runs";
+import { listRuns as api_agents_list_runs_listRuns } from "~backend/agents/list-runs";
 import { startRun as api_agents_start_run_startRun } from "~backend/agents/start-run";
 
 export namespace agents {
@@ -94,7 +97,10 @@ export namespace agents {
         constructor(baseClient: BaseClient) {
             this.baseClient = baseClient
             this.cancelRun = this.cancelRun.bind(this)
+            this.exportRuns = this.exportRuns.bind(this)
             this.getRun = this.getRun.bind(this)
+            this.listProjectRuns = this.listProjectRuns.bind(this)
+            this.listRuns = this.listRuns.bind(this)
             this.startRun = this.startRun.bind(this)
         }
 
@@ -104,10 +110,55 @@ export namespace agents {
             return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_cancel_run_cancelRun>
         }
 
+        public async exportRuns(params: RequestType<typeof api_agents_export_runs_exportRuns>): Promise<ResponseType<typeof api_agents_export_runs_exportRuns>> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                agentId:   params.agentId,
+                from:      params.from,
+                projectId: params.projectId,
+                q:         params.q,
+                status:    params.status,
+                to:        params.to,
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/runs/export`, {query, method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_export_runs_exportRuns>
+        }
+
         public async getRun(params: { runId: string }): Promise<ResponseType<typeof api_agents_get_run_getRun>> {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI(`/runs/${encodeURIComponent(params.runId)}`, {method: "GET", body: undefined})
             return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_get_run_getRun>
+        }
+
+        public async listProjectRuns(params: RequestType<typeof api_agents_list_project_runs_listProjectRuns>): Promise<ResponseType<typeof api_agents_list_project_runs_listProjectRuns>> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                limit: params.limit === undefined ? undefined : String(params.limit),
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/runs`, {query, method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_list_project_runs_listProjectRuns>
+        }
+
+        public async listRuns(params: RequestType<typeof api_agents_list_runs_listRuns>): Promise<ResponseType<typeof api_agents_list_runs_listRuns>> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                agentId:   params.agentId,
+                cursor:    params.cursor,
+                from:      params.from,
+                limit:     params.limit === undefined ? undefined : String(params.limit),
+                projectId: params.projectId,
+                q:         params.q,
+                status:    params.status,
+                to:        params.to,
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/runs`, {query, method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_list_runs_listRuns>
         }
 
         public async startRun(params: RequestType<typeof api_agents_start_run_startRun>): Promise<ResponseType<typeof api_agents_start_run_startRun>> {
