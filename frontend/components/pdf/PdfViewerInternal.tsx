@@ -1,3 +1,4 @@
+'use client';
 import { useMemo } from 'react';
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
@@ -9,11 +10,9 @@ export default function PdfViewerInternal({ fileUrl }: { fileUrl: string }) {
   
   if (typeof window === 'undefined' || !fileUrl) return null;
 
-  const workerUrl = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-
   return (
     <div style={{ width: '100%', height: '100%', minHeight: 480 }}>
-      <Worker workerUrl={workerUrl}>
+      <Worker workerUrl="/pdf.worker.min.js">
         <Viewer key={fileUrl} fileUrl={fileUrl} plugins={[plugin]} />
       </Worker>
     </div>
