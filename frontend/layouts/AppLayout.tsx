@@ -31,13 +31,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/Select";
+import { useAuth } from "@/lib/auth";
 
 const navigation = [
   { name: "Projects", href: "/projects", icon: FolderKanban },
@@ -59,8 +54,14 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, userProfile, organizations, currentOrgId, setCurrentOrgId, logout } = useAuth();
 
-  const handleLogout = () => {
+  const currentOrg = organizations.find(o => o.org_id === currentOrgId);
+  const userInitials = userProfile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 
+                       user?.email?.substring(0, 2).toUpperCase() || 'U';
+
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -173,23 +174,29 @@ export default function AppLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-4">
-            <Select defaultValue="acme-construction">
-              <SelectTrigger className="w-48 hidden sm:flex">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="acme-construction">Acme Construction</SelectItem>
-                <SelectItem value="demo-org">Demo Organization</SelectItem>
-              </SelectContent>
-            </Select>
+            {organizations.length > 0 && (
+              <Select 
+                value={currentOrgId || undefined}
+                onChange={(e) => setCurrentOrgId(e.target.value)}
+                className="w-48 hidden sm:flex"
+              >
+                {organizations.map((org) => (
+                  <option key={org.org_id} value={org.org_id}>
+                    {org.org.name}
+                  </option>
+                ))}
+              </Select>
+            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2" aria-label="User menu">
                   <div className="w-8 h-8 bg-[var(--vb-accent)] rounded-full flex items-center justify-center text-white text-sm font-medium">
-                    JD
+                    {userInitials}
                   </div>
-                  <span className="hidden sm:inline text-sm font-medium">John Doe</span>
+                  <span className="hidden sm:inline text-sm font-medium">
+                    {userProfile?.name || user?.email?.split('@')[0] || 'User'}
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
