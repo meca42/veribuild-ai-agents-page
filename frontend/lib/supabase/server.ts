@@ -1,30 +1,13 @@
-import { createServerClient as createSupabaseServerClient } from '@supabase/ssr';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from '../env';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-export const createServerClient = (cookies: {
-  get: (name: string) => string | undefined;
-  set: (name: string, value: string, options?: any) => void;
-  remove: (name: string, options?: any) => void;
-}) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error(
-      'Supabase credentials not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.'
-    );
+export function getServerSupabase(): SupabaseClient | null {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[Supabase] Server client not fully configured (URL or SERVICE_ROLE missing).');
+    return null;
   }
-
-  return createSupabaseServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      get(name: string) {
-        return cookies.get(name);
-      },
-      set(name: string, value: string, options: any) {
-        cookies.set(name, value, options);
-      },
-      remove(name: string, options: any) {
-        cookies.remove(name, options);
-      },
-    },
+  
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
   });
-};
+}

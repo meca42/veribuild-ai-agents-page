@@ -14,13 +14,18 @@ export default function CreateOrg() {
   const navigate = useNavigate();
   const { user, refreshOrgs, setCurrentOrgId } = useAuth();
   const { addToast } = useToast();
-  const supabase = createBrowserClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!orgName.trim()) {
       addToast('Organization name is required', 'error');
+      return;
+    }
+
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      addToast('Supabase not configured', 'error');
       return;
     }
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { USE_MOCK_API } from '../env';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -11,8 +12,6 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading, currentOrgId, organizations } = useAuth();
   const location = useLocation();
-  
-  const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (isLoading) {
     return (
@@ -25,7 +24,7 @@ export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRoutePr
     );
   }
 
-  if (!isSupabaseConfigured) {
+  if (USE_MOCK_API) {
     return <>{children}</>;
   }
 

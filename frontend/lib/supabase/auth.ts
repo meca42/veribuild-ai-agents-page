@@ -8,6 +8,8 @@ export interface AuthSession {
 
 export const getSession = async (): Promise<AuthSession | null> => {
   const supabase = createBrowserClient();
+  if (!supabase) return null;
+  
   const { data, error } = await supabase.auth.getSession();
 
   if (error || !data.session) {
@@ -30,11 +32,13 @@ export const requireSession = async (): Promise<AuthSession> => {
 
 export const signIn = async (email: string, password: string) => {
   const supabase = createBrowserClient();
+  if (!supabase) throw new Error('Supabase not configured');
   return supabase.auth.signInWithPassword({ email, password });
 };
 
 export const signUp = async (email: string, password: string, metadata?: Record<string, any>) => {
   const supabase = createBrowserClient();
+  if (!supabase) throw new Error('Supabase not configured');
   return supabase.auth.signUp({
     email,
     password,
@@ -47,6 +51,7 @@ export const signUp = async (email: string, password: string, metadata?: Record<
 
 export const signInWithGoogle = async () => {
   const supabase = createBrowserClient();
+  if (!supabase) throw new Error('Supabase not configured');
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -57,11 +62,13 @@ export const signInWithGoogle = async () => {
 
 export const signOut = async () => {
   const supabase = createBrowserClient();
+  if (!supabase) return { error: null };
   return supabase.auth.signOut();
 };
 
 export const resetPassword = async (email: string) => {
   const supabase = createBrowserClient();
+  if (!supabase) throw new Error('Supabase not configured');
   return supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/reset-password`,
   });
@@ -69,11 +76,14 @@ export const resetPassword = async (email: string) => {
 
 export const updatePassword = async (newPassword: string) => {
   const supabase = createBrowserClient();
+  if (!supabase) throw new Error('Supabase not configured');
   return supabase.auth.updateUser({ password: newPassword });
 };
 
 export const getCurrentUser = async (): Promise<User | null> => {
   const supabase = createBrowserClient();
+  if (!supabase) return null;
+  
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {

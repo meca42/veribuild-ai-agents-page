@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createBrowserClient } from '../supabase/client';
 import { useAuth } from '../auth';
+import { USE_MOCK_API } from '../env';
 
 export interface SessionData {
   user: User | null;
@@ -15,14 +16,16 @@ export const useSession = (): SessionData => {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    if (!isSupabaseConfigured) {
+    if (USE_MOCK_API) {
       setSession(null);
       return;
     }
 
     const supabase = createBrowserClient();
+    if (!supabase) {
+      setSession(null);
+      return;
+    }
     
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);

@@ -10,6 +10,12 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       try {
         const supabase = createBrowserClient();
+        if (!supabase) {
+          console.error('Supabase not configured');
+          navigate('/login?error=supabase_not_configured');
+          return;
+        }
+        
         const { error } = await supabase.auth.getSession();
         
         if (error) {

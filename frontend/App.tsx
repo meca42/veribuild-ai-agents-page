@@ -26,6 +26,7 @@ import Runs from "./pages/app/runs/Runs";
 import Settings from "./pages/app/settings/Settings";
 import Sandbox from "./pages/app/sandbox/Sandbox";
 import MockControls from "./pages/app/sandbox/MockControls";
+import EnvDebug from "./pages/app/sandbox/EnvDebug";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "./lib/auth";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -80,6 +81,7 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/sandbox/ui" element={<Sandbox />} />
               <Route path="/sandbox/mock" element={<MockControls />} />
+              <Route path="/sandbox/env" element={<EnvDebug />} />
             </Route>
           </Routes>
           <Toaster />

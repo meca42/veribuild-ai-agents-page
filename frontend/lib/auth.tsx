@@ -2,6 +2,7 @@ import { createContext, useContext, ReactNode, useEffect, useState } from "react
 import { User } from '@supabase/supabase-js';
 import { createBrowserClient } from "./supabase/client";
 import { signIn, signUp, signOut, signInWithGoogle, getCurrentUser } from "./supabase/auth";
+import { USE_MOCK_API } from "./env";
 
 interface OrgMember {
   id: string;
@@ -39,8 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organizations, setOrganizations] = useState<OrgMember[]>([]);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
 
-  const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY;
-  const supabase = isSupabaseConfigured ? createBrowserClient() : null;
+  const supabase = USE_MOCK_API ? null : createBrowserClient();
 
   const loadUserOrgs = async (userId: string) => {
     if (!supabase) return;
@@ -141,13 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [currentOrgId]);
 
   const login = async (email: string, password: string) => {
-    if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+    if (USE_MOCK_API) throw new Error('Cannot login in mock mode');
     const { error } = await signIn(email, password);
     if (error) throw error;
   };
 
   const loginWithGoogle = async () => {
-    if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+    if (USE_MOCK_API) throw new Error('Cannot login in mock mode');
     const { error } = await signInWithGoogle();
     if (error) throw error;
   };
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (name: string, email: string, password: string) => {
-    if (!isSupabaseConfigured) throw new Error('Supabase not configured');
+    if (USE_MOCK_API) throw new Error('Cannot signup in mock mode');
     const { error } = await signUp(email, password, { name });
     if (error) throw error;
   };

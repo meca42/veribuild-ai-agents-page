@@ -1,14 +1,22 @@
-import { createBrowserClient as createSupabaseClient } from '@supabase/ssr';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, USE_MOCK_API } from '../env';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+let _client: SupabaseClient | null = null;
 
-export const createBrowserClient = () => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error(
-      'Supabase credentials not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.'
-    );
+export function createBrowserClient(): SupabaseClient | null {
+  if (USE_MOCK_API) return null;
+  
+  if (!_client) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[Supabase] Not configured: SUPABASE_URL or SUPABASE_ANON_KEY missing.');
+      return null;
+    }
+    _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
   
-  return createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-};
+  return _client;
+}
+
+export function getBrowserSupabase(): SupabaseClient | null {
+  return createBrowserClient();
+}
