@@ -2,7 +2,7 @@ const m = (typeof import.meta !== 'undefined' ? import.meta.env : undefined) as 
 const p = (typeof process !== 'undefined' ? process.env : undefined) as any;
 
 export const USE_MOCK_API =
-  (m?.VITE_USE_MOCK_API ?? m?.USE_MOCK_API ?? p?.USE_MOCK_API ?? 'true').toString() === 'true';
+  (m?.VITE_USE_MOCK_API ?? p?.VITE_USE_MOCK_API ?? m?.USE_MOCK_API ?? p?.USE_MOCK_API ?? 'true').toString() === 'true';
 
 export const SUPABASE_URL =
   (m?.VITE_SUPABASE_URL ?? p?.NEXT_PUBLIC_SUPABASE_URL ?? '').trim();
