@@ -4,6 +4,9 @@ import AppLayout from "./layouts/AppLayout";
 import Home from "./pages/marketing/Home";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
+import ResetPassword from "./pages/auth/ResetPassword";
+import UpdatePassword from "./pages/auth/UpdatePassword";
+import AuthCallback from "./pages/auth/Callback";
 import CreateOrg from "./pages/onboarding/CreateOrg";
 import SelectOrg from "./pages/onboarding/SelectOrg";
 import ProjectsList from "./pages/app/projects/ProjectsList";
@@ -40,6 +43,9 @@ export default function App() {
 
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ResetPassword />} />
+            <Route path="/reset-password" element={<UpdatePassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             
             <Route path="/onboarding/create-org" element={
               <ProtectedRoute requireOrg={false}>
