@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
+import UploadDrawingModal, { type DrawingFormData } from "@/components/app/UploadDrawingModal";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import type * as API from "@/lib/api/types";
@@ -26,8 +28,11 @@ const disciplineColors = {
 
 export default function Drawings() {
   const { currentOrgId } = useAuth();
+  const { addToast } = useToast();
   const [drawings, setDrawings] = useState<API.Drawing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [disciplineFilter, setDisciplineFilter] = useState<string>("all");
   const [selectedProject, setSelectedProject] = useState<string>("all");
@@ -49,6 +54,26 @@ export default function Drawings() {
 
     fetchDrawings();
   }, [currentOrgId, selectedProject]);
+
+  const handleUploadDrawing = async (formData: DrawingFormData) => {
+    if (!currentOrgId || !formData.file) {
+      addToast('Missing required data', 'error');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // TODO: Implement file upload to Supabase Storage and create drawing record
+      addToast('Drawing upload not yet implemented', 'info');
+      console.log('Upload drawing:', formData);
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed to upload drawing:', err);
+      addToast(err.message || 'Failed to upload drawing', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const filteredDrawings = drawings.filter((d) => {
     const matchesSearch =
@@ -72,11 +97,18 @@ export default function Drawings() {
         title="Drawings"
         description="Project drawings and technical documentation"
         actions={
-          <Button className="bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
-            <Upload size={20} className="mr-2" />
+          <Button variant="primary" onClick={() => setIsModalOpen(true)}>
+            <Upload size={20} />
             Upload Drawing
           </Button>
         }
+      />
+
+      <UploadDrawingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleUploadDrawing}
+        isLoading={isUploading}
       />
 
       <div className="p-6">
@@ -163,7 +195,7 @@ export default function Drawings() {
             title="No drawings found"
             description="Upload project drawings to access them across your team."
             actionLabel="Upload Drawing"
-            onAction={() => {}}
+            onAction={() => setIsModalOpen(true)}
           />
         )}
       </div>
