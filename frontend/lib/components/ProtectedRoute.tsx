@@ -13,7 +13,18 @@ export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRoutePr
   const { isAuthenticated, isLoading, currentOrgId, organizations } = useAuth();
   const location = useLocation();
 
+  console.log('[ProtectedRoute]', { 
+    isLoading, 
+    isAuthenticated, 
+    USE_MOCK_API,
+    requireOrg, 
+    currentOrgId, 
+    orgsCount: organizations.length,
+    path: location.pathname 
+  });
+
   if (isLoading) {
+    console.log('[ProtectedRoute] Showing loading state');
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="text-center">
@@ -25,20 +36,25 @@ export const ProtectedRoute = ({ children, requireOrg = true }: ProtectedRoutePr
   }
 
   if (USE_MOCK_API) {
+    console.log('[ProtectedRoute] Mock mode - allowing access');
     return <>{children}</>;
   }
 
   if (!isAuthenticated) {
+    console.log('[ProtectedRoute] Not authenticated - redirecting to login');
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
   if (requireOrg && organizations.length === 0) {
+    console.log('[ProtectedRoute] No orgs - redirecting to create org');
     return <Navigate to="/onboarding/create-org" replace />;
   }
 
   if (requireOrg && !currentOrgId && organizations.length > 0) {
+    console.log('[ProtectedRoute] Has orgs but none selected - redirecting to select org');
     return <Navigate to="/onboarding/select-org" replace />;
   }
 
+  console.log('[ProtectedRoute] All checks passed - rendering children');
   return <>{children}</>;
 };
