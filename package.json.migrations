@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "db:migrate": "echo 'Apply migrations to your Supabase project via the Supabase dashboard or CLI'"
+  }
+}
