@@ -32,6 +32,14 @@ export default function CreateOrg() {
     setIsLoading(true);
 
     try {
+      // Check if user is authenticated
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log('Current authenticated user:', currentUser);
+      
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+
       const { data: org, error: orgError } = await supabase
         .from('orgs')
         .insert({ name: orgName })
