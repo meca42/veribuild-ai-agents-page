@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('[Auth] Loading user orgs for:', userId);
+      console.log('[Auth] Starting org_members query...');
       
       const { data, error } = await supabase
         .from('org_members')
@@ -60,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           )
         `)
         .eq('user_id', userId);
+
+      console.log('[Auth] Query completed. Data:', data, 'Error:', error);
 
       if (error) {
         console.error('[Auth] Error loading orgs:', error);
@@ -76,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           org: Array.isArray(item.org) ? item.org[0] : item.org
         }));
         
+        console.log('[Auth] Formatted orgs:', formattedOrgs);
         setOrganizations(formattedOrgs as OrgMember[]);
         
         const savedOrgId = localStorage.getItem('currentOrgId');
@@ -95,12 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('[Auth] Loading user profile for:', userId);
+      console.log('[Auth] Starting users query...');
       
       const { data, error } = await supabase
         .from('users')
         .select('name, avatar_url')
         .eq('id', userId)
         .single();
+
+      console.log('[Auth] Profile query completed. Data:', data, 'Error:', error);
 
       if (error) {
         console.error('[Auth] Error loading profile:', error);
