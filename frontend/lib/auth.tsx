@@ -48,12 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Loading user orgs for:', userId);
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout loading orgs')), 5000)
-      );
-      
-      const queryPromise = supabase
+      const { data, error } = await supabase
         .from('org_members')
         .select(`
           id,
@@ -66,8 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           )
         `)
         .eq('user_id', userId);
-
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error('[Auth] Error loading orgs:', error);
@@ -104,18 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Loading user profile for:', userId);
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout loading profile')), 5000)
-      );
-      
-      const queryPromise = supabase
+      const { data, error } = await supabase
         .from('users')
         .select('name, avatar_url')
         .eq('id', userId)
         .single();
-
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error('[Auth] Error loading profile:', error);
