@@ -1,6 +1,12 @@
 const m = (typeof import.meta !== 'undefined' ? import.meta.env : undefined) as any;
 const p = (typeof process !== 'undefined' ? process.env : undefined) as any;
 
+// Debug logging
+if (typeof window === 'undefined') {
+  console.log('[env.ts BUILD] VITE_USE_MOCK_API from import.meta.env:', m?.VITE_USE_MOCK_API);
+  console.log('[env.ts BUILD] VITE_SUPABASE_URL from import.meta.env:', m?.VITE_SUPABASE_URL?.slice(0, 30));
+}
+
 export const USE_MOCK_API =
   (m?.VITE_USE_MOCK_API ?? p?.VITE_USE_MOCK_API ?? m?.USE_MOCK_API ?? p?.USE_MOCK_API ?? 'true').toString() === 'true';
 

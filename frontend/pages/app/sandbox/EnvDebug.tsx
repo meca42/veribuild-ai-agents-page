@@ -8,6 +8,12 @@ export default function EnvDebug() {
     return `${key.slice(0, 20)}...${key.slice(-10)}`;
   };
 
+  // Debug: Log raw env values
+  console.log('[EnvDebug] import.meta.env:', import.meta.env);
+  console.log('[EnvDebug] USE_MOCK_API:', USE_MOCK_API);
+  console.log('[EnvDebug] SUPABASE_URL:', SUPABASE_URL);
+  console.log('[EnvDebug] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? `${SUPABASE_ANON_KEY.slice(0, 20)}...` : '(empty)');
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
