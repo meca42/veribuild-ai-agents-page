@@ -23,6 +23,8 @@ export default function RFI() {
   const { id: projectId } = useParams<{ id: string }>();
   const { currentOrgId } = useAuth();
   const { addToast } = useToast();
+  const [projects, setProjects] = useState<API.Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [rfis, setRfis] = useState<API.RFI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,15 +35,41 @@ export default function RFI() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchRFIs();
-  }, [currentOrgId, projectId, statusFilter]);
+    const loadProjects = async () => {
+      if (!currentOrgId) return;
+      
+      try {
+        const response = await api.listProjects(currentOrgId, { pageSize: 100 });
+        setProjects(response.data);
+        if (response.data.length > 0 && !selectedProjectId) {
+          setSelectedProjectId(response.data[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      }
+    };
+
+    loadProjects();
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchRFIs();
+    }
+  }, [selectedProjectId, statusFilter]);
 
   const fetchRFIs = async () => {
-    if (!projectId) return;
+    if (!selectedProjectId) return;
     
     setIsLoading(true);
     try {
-      const result = await api.listRFIs(projectId, {
+      const result = await api.listRFIs(selectedProjectId, {
         status: statusFilter === "all" ? undefined : statusFilter,
         q: searchQuery || undefined,
       });
@@ -56,7 +84,7 @@ export default function RFI() {
 
   const handleCreateRFI = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!projectId) return;
+    if (!selectedProjectId) return;
 
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -68,7 +96,7 @@ export default function RFI() {
 
     setIsSubmitting(true);
     try {
-      const newRFI = await api.createRFI(projectId, data);
+      const newRFI = await api.createRFI(selectedProjectId, data);
       setRfis(prev => [newRFI, ...prev]);
       setIsNewRFIModalOpen(false);
       addToast('RFI created successfully', 'success');
@@ -150,7 +178,20 @@ export default function RFI() {
       />
 
       <div className="p-6">
-        <div className="mb-6 flex gap-4">
+        <div className="mb-6 flex gap-4 flex-wrap">
+          {!projectId && projects.length > 0 && (
+            <Select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-64"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          )}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
             <Input

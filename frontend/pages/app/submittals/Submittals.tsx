@@ -32,6 +32,8 @@ export default function Submittals() {
   const { id: projectId } = useParams<{ id: string }>();
   const { currentOrgId } = useAuth();
   const { addToast } = useToast();
+  const [projects, setProjects] = useState<API.Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [submittals, setSubmittals] = useState<API.Submittal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,15 +44,41 @@ export default function Submittals() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchSubmittals();
-  }, [currentOrgId, projectId, statusFilter]);
+    const loadProjects = async () => {
+      if (!currentOrgId) return;
+      
+      try {
+        const response = await api.listProjects(currentOrgId, { pageSize: 100 });
+        setProjects(response.data);
+        if (response.data.length > 0 && !selectedProjectId) {
+          setSelectedProjectId(response.data[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      }
+    };
+
+    loadProjects();
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchSubmittals();
+    }
+  }, [selectedProjectId, statusFilter]);
 
   const fetchSubmittals = async () => {
-    if (!projectId) return;
+    if (!selectedProjectId) return;
     
     setIsLoading(true);
     try {
-      const result = await api.listSubmittals(projectId, {
+      const result = await api.listSubmittals(selectedProjectId, {
         status: statusFilter === "all" ? undefined : statusFilter,
         q: searchQuery || undefined,
       });
@@ -65,7 +93,7 @@ export default function Submittals() {
 
   const handleCreateSubmittal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!projectId) return;
+    if (!selectedProjectId) return;
 
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -77,7 +105,7 @@ export default function Submittals() {
 
     setIsSubmitting(true);
     try {
-      const newSubmittal = await api.createSubmittal(projectId, data);
+      const newSubmittal = await api.createSubmittal(selectedProjectId, data);
       setSubmittals(prev => [newSubmittal, ...prev]);
       setIsNewSubmittalModalOpen(false);
       addToast('Submittal created successfully', 'success');
@@ -206,7 +234,20 @@ export default function Submittals() {
       />
 
       <div className="p-6">
-        <div className="mb-6 flex gap-4">
+        <div className="mb-6 flex gap-4 flex-wrap">
+          {!projectId && projects.length > 0 && (
+            <Select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-64"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          )}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
             <Input
