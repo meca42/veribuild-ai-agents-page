@@ -45,50 +45,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserOrgs = async (userId: string) => {
     if (!supabase) return;
     
-    const { data, error } = await supabase
-      .from('org_members')
-      .select(`
-        id,
-        org_id,
-        role,
-        org:orgs!inner (
+    try {
+      console.log('[Auth] Loading user orgs for:', userId);
+      const { data, error } = await supabase
+        .from('org_members')
+        .select(`
           id,
-          name,
-          avatar_url
-        )
-      `)
-      .eq('user_id', userId);
+          org_id,
+          role,
+          org:orgs!inner (
+            id,
+            name,
+            avatar_url
+          )
+        `)
+        .eq('user_id', userId);
 
-    if (!error && data) {
-      const formattedOrgs = data.map((item: any) => ({
-        id: item.id,
-        org_id: item.org_id,
-        role: item.role,
-        org: Array.isArray(item.org) ? item.org[0] : item.org
-      }));
-      
-      setOrganizations(formattedOrgs as OrgMember[]);
-      
-      const savedOrgId = localStorage.getItem('currentOrgId');
-      if (savedOrgId && formattedOrgs.some((m: any) => m.org_id === savedOrgId)) {
-        setCurrentOrgId(savedOrgId);
-      } else if (formattedOrgs.length > 0) {
-        setCurrentOrgId(formattedOrgs[0].org_id);
+      if (error) {
+        console.error('[Auth] Error loading orgs:', error);
+        return;
       }
+
+      console.log('[Auth] Orgs loaded:', data?.length || 0);
+
+      if (!error && data) {
+        const formattedOrgs = data.map((item: any) => ({
+          id: item.id,
+          org_id: item.org_id,
+          role: item.role,
+          org: Array.isArray(item.org) ? item.org[0] : item.org
+        }));
+        
+        setOrganizations(formattedOrgs as OrgMember[]);
+        
+        const savedOrgId = localStorage.getItem('currentOrgId');
+        if (savedOrgId && formattedOrgs.some((m: any) => m.org_id === savedOrgId)) {
+          setCurrentOrgId(savedOrgId);
+        } else if (formattedOrgs.length > 0) {
+          setCurrentOrgId(formattedOrgs[0].org_id);
+        }
+      }
+    } catch (error) {
+      console.error('[Auth] Exception loading orgs:', error);
     }
   };
 
   const loadUserProfile = async (userId: string) => {
     if (!supabase) return;
     
-    const { data } = await supabase
-      .from('users')
-      .select('name, avatar_url')
-      .eq('id', userId)
-      .single();
+    try {
+      console.log('[Auth] Loading user profile for:', userId);
+      const { data, error } = await supabase
+        .from('users')
+        .select('name, avatar_url')
+        .eq('id', userId)
+        .single();
 
-    if (data) {
-      setUserProfile(data);
+      if (error) {
+        console.error('[Auth] Error loading profile:', error);
+        return;
+      }
+
+      console.log('[Auth] Profile loaded');
+
+      if (data) {
+        setUserProfile(data);
+      }
+    } catch (error) {
+      console.error('[Auth] Exception loading profile:', error);
     }
   };
 
