@@ -29,7 +29,6 @@ import Settings from "./pages/app/settings/Settings";
 import Sandbox from "./pages/app/sandbox/Sandbox";
 import MockControls from "./pages/app/sandbox/MockControls";
 import EnvDebug from "./pages/app/sandbox/EnvDebug";
-import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "./lib/auth";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ProtectedRoute } from "./lib/components/ProtectedRoute";
@@ -87,7 +86,6 @@ export default function App() {
               <Route path="/sandbox/env" element={<EnvDebug />} />
             </Route>
           </Routes>
-          <Toaster />
         </BrowserRouter>
       </ToastProvider>
     </AuthProvider>
