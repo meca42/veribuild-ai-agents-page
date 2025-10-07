@@ -67,7 +67,7 @@ export default function AppLayout() {
   const userInitials = userProfile?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 
                        user?.email?.substring(0, 2).toUpperCase() || 'U';
 
-  const projectContextPages = ['/drawings', '/documents', '/rfi', '/submittals'];
+  const projectContextPages = ['/drawings', '/documents', '/rfi', '/submittals', '/materials', '/issues', '/inspections', '/agents', '/runs'];
   const needsProjectSelector = projectContextPages.some(page => location.pathname.startsWith(page));
 
   useEffect(() => {

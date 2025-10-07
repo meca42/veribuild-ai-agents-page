@@ -16,6 +16,7 @@ interface MockDatabase {
   inventoryLots: API.InventoryLot[];
   issues: API.Issue[];
   inspections: API.Inspection[];
+  tools: API.Tool[];
   agents: API.Agent[];
   agentRuns: API.AgentRun[];
   apiKeys: API.ApiKey[];
@@ -37,6 +38,7 @@ let db: MockDatabase = {
   inventoryLots: [],
   issues: [],
   inspections: [],
+  tools: [],
   agents: [],
   agentRuns: [],
   apiKeys: [],
@@ -386,38 +388,178 @@ const generateInspections = (projectId: string, stepIds: string[], count: number
   });
 };
 
-const generateAgents = (projectId: string | undefined, count: number): API.Agent[] => {
-  const agentNames = ['Document Analyzer', 'Schedule Optimizer', 'Quality Inspector', 'Budget Monitor'];
-  return Array.from({ length: count }, (_, i) => ({
-    id: generateId('agent'),
-    projectId,
-    name: agentNames[i % agentNames.length],
-    description: faker.lorem.sentence(),
-    status: randomElement(['active', 'paused', 'archived'] as API.AgentStatus[]),
-    allowedTools: randomElements(agentTools, randomInt(2, 4)),
-    createdAt: randomPastDate(90),
-    updatedAt: new Date(),
+const models = ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'claude-3-opus', 'claude-3-sonnet'];
+const toolPolicies: API.ToolPolicy[] = ['conservative', 'balanced', 'aggressive'];
+
+const generateTools = (orgId: string, count: number): API.Tool[] => {
+  const toolDefinitions = [
+    {
+      name: 'search_drawings',
+      description: 'Search for drawings by number, title, or discipline',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project_id: { type: 'string' },
+          query: { type: 'string' },
+        },
+        required: ['project_id', 'query'],
+      },
+    },
+    {
+      name: 'query_inventory',
+      description: 'Query on-site inventory for material quantities and locations',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project_id: { type: 'string' },
+          item_number: { type: 'string' },
+        },
+        required: ['project_id', 'item_number'],
+      },
+    },
+    {
+      name: 'create_rfi',
+      description: 'Create a new Request for Information',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project_id: { type: 'string' },
+          title: { type: 'string' },
+          question: { type: 'string' },
+        },
+        required: ['project_id', 'title', 'question'],
+      },
+    },
+    {
+      name: 'search_documents',
+      description: 'Search for project documents by title or content',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project_id: { type: 'string' },
+          query: { type: 'string' },
+        },
+        required: ['project_id', 'query'],
+      },
+    },
+  ];
+
+  return toolDefinitions.slice(0, count).map((def, i) => ({
+    id: generateId('tool'),
+    orgId,
+    name: def.name,
+    version: '1.0.0',
+    description: def.description,
+    inputSchema: def.inputSchema,
+    outputSchema: undefined,
+    isActive: true,
+    createdAt: randomPastDate(180),
   }));
 };
 
-const generateAgentRuns = (agentId: string, projectId: string | undefined, count: number): API.AgentRun[] => {
+const generateAgents = (orgId: string, projectId: string | undefined, tools: API.Tool[], count: number): API.Agent[] => {
+  const agentNames = ['Construction Assistant', 'Document Analyzer', 'Schedule Optimizer', 'Quality Inspector', 'Budget Monitor'];
+  const systemPrompts = [
+    'You are a helpful construction assistant. Help users with project information and tasks.',
+    'You are a document analyzer specialized in construction documentation.',
+    'You help optimize construction schedules and identify potential delays.',
+    'You assist with quality control and inspection workflows.',
+    'You monitor project budgets and financial metrics.',
+  ];
+
+  return Array.from({ length: count }, (_, i) => {
+    const agentTools = randomElements(tools, randomInt(2, Math.min(4, tools.length)));
+    const lastRun = Math.random() > 0.3 ? randomPastDate(7) : undefined;
+    
+    return {
+      id: generateId('agent'),
+      orgId,
+      projectId,
+      name: agentNames[i % agentNames.length],
+      model: randomElement(models),
+      systemPrompt: systemPrompts[i % systemPrompts.length],
+      temperature: Number((Math.random() * 0.8 + 0.2).toFixed(2)),
+      toolPolicy: randomElement(toolPolicies),
+      maxSteps: randomElement([8, 12, 16, 20]),
+      isActive: Math.random() > 0.1,
+      createdAt: randomPastDate(90),
+      updatedAt: new Date(),
+      tools: agentTools,
+      toolCount: agentTools.length,
+      lastRun,
+    };
+  });
+};
+
+const generateAgentRuns = (agentId: string, agentName: string, projectId: string | undefined, count: number): API.AgentRun[] => {
+  const triggers: API.AgentRunTrigger[] = ['ui', 'api', 'schedule'];
+  const statuses: API.AgentRunStatus[] = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
+  
   return Array.from({ length: count }, () => {
-    const status = randomElement(['running', 'completed', 'failed', 'cancelled'] as API.RunStatus[]);
-    const startedAt = randomPastDate(30);
-    const duration = status === 'completed' ? randomInt(1000, 60000) : status === 'failed' ? randomInt(500, 5000) : undefined;
+    const status = randomElement(statuses);
+    const startedAt = status !== 'queued' ? randomPastDate(30) : undefined;
+    const finishedAt = (status === 'succeeded' || status === 'failed' || status === 'cancelled') && startedAt
+      ? new Date(startedAt.getTime() + randomInt(1000, 30000))
+      : undefined;
+    const latencyMs = finishedAt && startedAt ? finishedAt.getTime() - startedAt.getTime() : undefined;
+    
+    const messages: API.AgentMessage[] = [];
+    const toolCalls: API.ToolCall[] = [];
+    
+    if (status !== 'queued') {
+      messages.push({
+        id: generateId('msg'),
+        runId: generateId('run'),
+        role: 'user',
+        content: faker.lorem.sentence(),
+        seq: 0,
+        createdAt: startedAt || new Date(),
+      });
+      
+      if (status === 'succeeded' || status === 'failed') {
+        messages.push({
+          id: generateId('msg'),
+          runId: generateId('run'),
+          role: 'assistant',
+          content: status === 'succeeded' ? faker.lorem.paragraph() : 'An error occurred',
+          seq: 1,
+          createdAt: finishedAt || new Date(),
+        });
+        
+        toolCalls.push({
+          id: generateId('call'),
+          runId: generateId('run'),
+          toolId: generateId('tool'),
+          seq: 0,
+          input: { query: faker.lorem.words(3) },
+          output: status === 'succeeded' ? { results: [faker.lorem.sentence()] } : undefined,
+          status: status === 'succeeded' ? 'ok' : 'error',
+          startedAt: startedAt || new Date(),
+          finishedAt: finishedAt,
+          error: status === 'failed' ? 'Tool execution failed' : undefined,
+          toolName: randomElement(['search_drawings', 'query_inventory', 'create_rfi']),
+        });
+      }
+    }
     
     return {
       id: generateId('run'),
       agentId,
       projectId,
-      status,
+      startedBy: faker.person.fullName(),
+      trigger: randomElement(triggers),
       input: faker.lorem.sentence(),
-      output: status === 'completed' ? faker.lorem.paragraph() : undefined,
+      status,
       startedAt,
-      completedAt: status !== 'running' ? new Date(startedAt.getTime() + (duration || 0)) : undefined,
-      duration,
-      tokensUsed: status === 'completed' ? randomInt(100, 5000) : undefined,
-      trace: status === 'completed' ? { steps: randomInt(3, 12), tools_used: randomElements(agentTools, randomInt(1, 3)) } : undefined,
+      finishedAt,
+      latencyMs,
+      error: status === 'failed' ? 'Agent execution error: ' + faker.lorem.sentence() : undefined,
+      resultSummary: status === 'succeeded' ? faker.lorem.sentence() : undefined,
+      resultBlob: status === 'succeeded' ? { data: faker.lorem.paragraph() } : undefined,
+      createdAt: randomPastDate(30),
+      agentName,
+      messages,
+      toolCalls,
     };
   });
 };
@@ -462,6 +604,7 @@ export const seedDatabase = () => {
   const allInventoryLots: API.InventoryLot[] = [];
   const allIssues: API.Issue[] = [];
   const allInspections: API.Inspection[] = [];
+  const allTools: API.Tool[] = [];
   const allAgents: API.Agent[] = [];
   const allAgentRuns: API.AgentRun[] = [];
   const allApiKeys: API.ApiKey[] = [];
@@ -470,6 +613,10 @@ export const seedDatabase = () => {
   orgs.forEach((org) => {
     const projects = generateProjects(org.id, randomInt(5, 8));
     allProjects.push(...projects);
+
+    // Generate tools for the org
+    const tools = generateTools(org.id, 4);
+    allTools.push(...tools);
 
     projects.forEach((project) => {
       const phases = generatePhases(project.id);
@@ -496,11 +643,11 @@ export const seedDatabase = () => {
       allIssues.push(...generateIssues(project.id, stepIds, randomInt(10, 40)));
       allInspections.push(...generateInspections(project.id, stepIds, randomInt(8, 25)));
 
-      const projectAgents = generateAgents(project.id, randomInt(1, 3));
+      const projectAgents = generateAgents(org.id, project.id, tools, randomInt(1, 3));
       allAgents.push(...projectAgents);
 
       projectAgents.forEach((agent) => {
-        allAgentRuns.push(...generateAgentRuns(agent.id, project.id, randomInt(5, 20)));
+        allAgentRuns.push(...generateAgentRuns(agent.id, agent.name, project.id, randomInt(5, 20)));
       });
     });
 
@@ -523,6 +670,7 @@ export const seedDatabase = () => {
     inventoryLots: allInventoryLots,
     issues: allIssues,
     inspections: allInspections,
+    tools: allTools,
     agents: allAgents,
     agentRuns: allAgentRuns,
     apiKeys: allApiKeys,

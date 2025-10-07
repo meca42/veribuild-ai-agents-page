@@ -13,6 +13,11 @@ export type InspectionStatus = 'scheduled' | 'in_progress' | 'passed' | 'failed'
 export type InspectionItemResult = 'pass' | 'fail' | 'n/a';
 export type AgentStatus = 'active' | 'paused' | 'archived';
 export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+export type ToolPolicy = 'conservative' | 'balanced' | 'aggressive';
+export type AgentRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type AgentRunTrigger = 'ui' | 'api' | 'schedule' | 'webhook';
+export type MessageRole = 'user' | 'assistant' | 'tool' | 'system';
+export type ToolCallStatus = 'ok' | 'error';
 
 export interface Organization {
   id: string;
@@ -298,29 +303,84 @@ export interface Inspection {
   items?: InspectionItem[];
 }
 
+export interface Tool {
+  id: string;
+  orgId: string;
+  name: string;
+  version: string;
+  description?: string;
+  inputSchema: Record<string, any>;
+  outputSchema?: Record<string, any>;
+  isActive: boolean;
+  createdAt: Date;
+}
+
 export interface Agent {
   id: string;
+  orgId: string;
   projectId?: string;
   name: string;
-  description?: string;
-  status: AgentStatus;
-  allowedTools: string[];
+  model: string;
+  systemPrompt?: string;
+  temperature: number;
+  toolPolicy: ToolPolicy;
+  maxSteps: number;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  tools?: Tool[];
+  toolCount?: number;
+  lastRun?: Date;
+}
+
+export interface AgentTool {
+  agentId: string;
+  toolId: string;
+  config: Record<string, any>;
+}
+
+export interface AgentMessage {
+  id: string;
+  runId: string;
+  role: MessageRole;
+  content?: string;
+  toolName?: string;
+  seq: number;
+  createdAt: Date;
+}
+
+export interface ToolCall {
+  id: string;
+  runId: string;
+  toolId: string;
+  seq: number;
+  input: Record<string, any>;
+  output?: Record<string, any>;
+  status: ToolCallStatus;
+  startedAt: Date;
+  finishedAt?: Date;
+  error?: string;
+  toolName?: string;
 }
 
 export interface AgentRun {
   id: string;
   agentId: string;
   projectId?: string;
-  status: RunStatus;
-  input: string;
-  output?: string;
-  startedAt: Date;
-  completedAt?: Date;
-  duration?: number;
-  tokensUsed?: number;
-  trace?: any;
+  startedBy?: string;
+  trigger: AgentRunTrigger;
+  input?: string;
+  status: AgentRunStatus;
+  startedAt?: Date;
+  finishedAt?: Date;
+  latencyMs?: number;
+  error?: string;
+  resultSummary?: string;
+  resultBlob?: Record<string, any>;
+  createdAt: Date;
+  agentName?: string;
+  messages?: AgentMessage[];
+  toolCalls?: ToolCall[];
 }
 
 export interface ApiKey {

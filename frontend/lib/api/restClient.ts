@@ -2301,23 +2301,458 @@ export const updateInspectionItem = async (
   return mapInspectionItem(item);
 };
 
-export const listAgents = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.Agent>> => {
+// Tool mappers
+const mapTool = (data: any): API.Tool => ({
+  id: data.id,
+  orgId: data.org_id,
+  name: data.name,
+  version: data.version,
+  description: data.description,
+  inputSchema: data.input_schema,
+  outputSchema: data.output_schema,
+  isActive: data.is_active,
+  createdAt: new Date(data.created_at),
+});
+
+// Agent mappers
+const mapAgent = (data: any): API.Agent => ({
+  id: data.id,
+  orgId: data.org_id,
+  projectId: data.project_id,
+  name: data.name,
+  model: data.model,
+  systemPrompt: data.system_prompt,
+  temperature: data.temperature,
+  toolPolicy: data.tool_policy,
+  maxSteps: data.max_steps,
+  isActive: data.is_active,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+  tools: (data.tools || []).map(mapTool),
+  toolCount: data.tool_count,
+  lastRun: data.last_run ? new Date(data.last_run) : undefined,
+});
+
+// Agent run mappers
+const mapAgentMessage = (data: any): API.AgentMessage => ({
+  id: data.id,
+  runId: data.run_id,
+  role: data.role,
+  content: data.content,
+  toolName: data.tool_name,
+  seq: data.seq,
+  createdAt: new Date(data.created_at),
+});
+
+const mapToolCall = (data: any): API.ToolCall => ({
+  id: data.id,
+  runId: data.run_id,
+  toolId: data.tool_id,
+  seq: data.seq,
+  input: data.input,
+  output: data.output,
+  status: data.status,
+  startedAt: new Date(data.started_at),
+  finishedAt: data.finished_at ? new Date(data.finished_at) : undefined,
+  error: data.error,
+  toolName: data.tool?.name,
+});
+
+const mapAgentRun = (data: any): API.AgentRun => ({
+  id: data.id,
+  agentId: data.agent_id,
+  projectId: data.project_id,
+  startedBy: data.started_by,
+  trigger: data.trigger,
+  input: data.input,
+  status: data.status,
+  startedAt: data.started_at ? new Date(data.started_at) : undefined,
+  finishedAt: data.finished_at ? new Date(data.finished_at) : undefined,
+  latencyMs: data.latency_ms,
+  error: data.error,
+  resultSummary: data.result_summary,
+  resultBlob: data.result_blob,
+  createdAt: new Date(data.created_at),
+  agentName: data.agent?.name,
+  messages: (data.messages || []).map(mapAgentMessage),
+  toolCalls: (data.tool_calls || []).map(mapToolCall),
+});
+
+// Tools API
+export const listTools = async (orgId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Tool>> => {
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('tools')
+    .select('*', { count: 'exact' })
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
+
+  if (params.q) {
+    query = query.or(`name.ilike.%${params.q}%,description.ilike.%${params.q}%`);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapTool),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const createTool = async (orgId: string, data: Partial<API.Tool>): Promise<API.Tool> => {
+  const supabase = getSupabase();
+  
+  const { data: tool, error } = await supabase
+    .from('tools')
+    .insert({
+      org_id: orgId,
+      name: data.name,
+      version: data.version,
+      description: data.description,
+      input_schema: data.inputSchema,
+      output_schema: data.outputSchema,
+      is_active: data.isActive !== undefined ? data.isActive : true,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapTool(tool);
+};
+
+export const updateTool = async (toolId: string, data: Partial<API.Tool>): Promise<API.Tool> => {
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.inputSchema !== undefined) updateData.input_schema = data.inputSchema;
+  if (data.outputSchema !== undefined) updateData.output_schema = data.outputSchema;
+  if (data.isActive !== undefined) updateData.is_active = data.isActive;
+
+  const { data: tool, error } = await supabase
+    .from('tools')
+    .update(updateData)
+    .eq('id', toolId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapTool(tool);
+};
+
+// Agents API
+export const listAgents = async (params: { orgId: string; projectId?: string; q?: string; page?: number; pageSize?: number }): Promise<PaginatedResponse<API.Agent>> => {
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('agents')
+    .select(`
+      *,
+      tools:agent_tools(
+        tool:tools(*)
+      ),
+      runs:agent_runs(started_at)
+    `, { count: 'exact' })
+    .eq('org_id', params.orgId)
+    .order('created_at', { ascending: false });
+
+  if (params.projectId) {
+    query = query.eq('project_id', params.projectId);
+  }
+
+  if (params.q) {
+    query = query.or(`name.ilike.%${params.q}%,system_prompt.ilike.%${params.q}%`);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  const agents = (data || []).map((a: any) => ({
+    ...mapAgent(a),
+    tools: (a.tools || []).map((t: any) => mapTool(t.tool)),
+    toolCount: (a.tools || []).length,
+    lastRun: a.runs && a.runs.length > 0 
+      ? new Date(Math.max(...a.runs.map((r: any) => new Date(r.started_at).getTime()))) 
+      : undefined,
+  }));
+
+  return {
+    data: agents,
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const getAgent = async (agentId: string): Promise<API.Agent> => {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('agents')
+    .select(`
+      *,
+      tools:agent_tools(
+        tool:tools(*)
+      )
+    `)
+    .eq('id', agentId)
+    .single();
+
+  if (error) throw error;
+  
+  return {
+    ...mapAgent(data),
+    tools: (data.tools || []).map((t: any) => mapTool(t.tool)),
+    toolCount: (data.tools || []).length,
+  };
+};
+
+export const createAgent = async (orgId: string, data: { 
+  projectId?: string; 
+  name: string; 
+  model: string; 
+  systemPrompt?: string; 
+  temperature?: number; 
+  toolPolicy?: API.ToolPolicy; 
+  maxSteps?: number;
+  toolIds?: string[];
+}): Promise<API.Agent> => {
+  const supabase = getSupabase();
+  
+  const { data: agent, error } = await supabase
+    .from('agents')
+    .insert({
+      org_id: orgId,
+      project_id: data.projectId,
+      name: data.name,
+      model: data.model,
+      system_prompt: data.systemPrompt,
+      temperature: data.temperature || 0.2,
+      tool_policy: data.toolPolicy || 'balanced',
+      max_steps: data.maxSteps || 16,
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Add tools to agent
+  if (data.toolIds && data.toolIds.length > 0) {
+    const { error: toolError } = await supabase
+      .from('agent_tools')
+      .insert(
+        data.toolIds.map(toolId => ({
+          agent_id: agent.id,
+          tool_id: toolId,
+          config: {},
+        }))
+      );
+
+    if (toolError) throw toolError;
+  }
+
+  return getAgent(agent.id);
+};
+
+export const updateAgent = async (agentId: string, data: Partial<API.Agent> & { toolIds?: string[] }): Promise<API.Agent> => {
+  const supabase = getSupabase();
+  
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.model !== undefined) updateData.model = data.model;
+  if (data.systemPrompt !== undefined) updateData.system_prompt = data.systemPrompt;
+  if (data.temperature !== undefined) updateData.temperature = data.temperature;
+  if (data.toolPolicy !== undefined) updateData.tool_policy = data.toolPolicy;
+  if (data.maxSteps !== undefined) updateData.max_steps = data.maxSteps;
+  if (data.isActive !== undefined) updateData.is_active = data.isActive;
+
+  const { error } = await supabase
+    .from('agents')
+    .update(updateData)
+    .eq('id', agentId);
+
+  if (error) throw error;
+
+  // Update tools if provided
+  if (data.toolIds !== undefined) {
+    // Delete existing tool associations
+    await supabase
+      .from('agent_tools')
+      .delete()
+      .eq('agent_id', agentId);
+
+    // Add new tool associations
+    if (data.toolIds.length > 0) {
+      const { error: toolError } = await supabase
+        .from('agent_tools')
+        .insert(
+          data.toolIds.map(toolId => ({
+            agent_id: agentId,
+            tool_id: toolId,
+            config: {},
+          }))
+        );
+
+      if (toolError) throw toolError;
+    }
+  }
+
+  return getAgent(agentId);
+};
+
+// Agent Runs API
+export const listAgentRuns = async (params: { 
+  orgId: string;
+  agentId?: string; 
+  projectId?: string; 
+  status?: API.AgentRunStatus;
+  page?: number; 
+  pageSize?: number;
+}): Promise<PaginatedResponse<API.AgentRun>> => {
+  const supabase = getSupabase();
+  
+  let query = supabase
+    .from('agent_runs')
+    .select(`
+      *,
+      agent:agents(name, org_id)
+    `, { count: 'exact' })
+    .order('started_at', { ascending: false });
+
+  // Filter by org through agent
+  const { data: orgAgents } = await supabase
+    .from('agents')
+    .select('id')
+    .eq('org_id', params.orgId);
+
+  if (orgAgents) {
+    const agentIds = orgAgents.map((a: any) => a.id);
+    query = query.in('agent_id', agentIds);
+  }
+
+  if (params.agentId) {
+    query = query.eq('agent_id', params.agentId);
+  }
+
+  if (params.projectId) {
+    query = query.eq('project_id', params.projectId);
+  }
+
+  if (params.status) {
+    query = query.eq('status', params.status);
+  }
+
+  const limit = params.pageSize || 20;
+  const offset = ((params.page || 1) - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data || []).map(mapAgentRun),
+    total: count || 0,
+    page: params.page || 1,
+    pageSize: limit,
+  };
+};
+
+export const getAgentRun = async (runId: string): Promise<API.AgentRun> => {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('agent_runs')
+    .select(`
+      *,
+      agent:agents(name),
+      messages:agent_messages(*),
+      tool_calls:tool_calls(
+        *,
+        tool:tools(name)
+      )
+    `)
+    .eq('id', runId)
+    .single();
+
+  if (error) throw error;
+  return mapAgentRun(data);
+};
+
+export const startAgentRun = async (agentId: string, input: string, projectId?: string): Promise<API.AgentRun> => {
+  const supabase = getSupabase();
+  
+  const { data: run, error } = await supabase
+    .from('agent_runs')
+    .insert({
+      agent_id: agentId,
+      project_id: projectId,
+      started_by: (await supabase.auth.getUser()).data.user?.id,
+      trigger: 'ui',
+      input,
+      status: 'queued',
+      created_at: new Date().toISOString(),
+    })
+    .select(`
+      *,
+      agent:agents(name)
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapAgentRun(run);
+};
+
+export const cancelAgentRun = async (runId: string): Promise<API.AgentRun> => {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('agent_runs')
+    .update({ 
+      status: 'cancelled',
+      finished_at: new Date().toISOString(),
+    })
+    .eq('id', runId)
+    .eq('status', 'running') // Only cancel running runs
+    .select(`
+      *,
+      agent:agents(name)
+    `)
+    .single();
+
+  if (error) throw error;
+  return mapAgentRun(data);
+};
+
+export const listAgents_old = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.Agent>> => {
   throw new Error('Not implemented - use mock client');
 };
 
-export const createAgent = async (projectId: string | undefined, data: Partial<API.Agent>): Promise<API.Agent> => {
+export const createAgent_old = async (projectId: string | undefined, data: Partial<API.Agent>): Promise<API.Agent> => {
   throw new Error('Not implemented - use mock client');
 };
 
-export const updateAgent = async (id: string, data: Partial<API.Agent>): Promise<API.Agent> => {
+export const updateAgent_old = async (id: string, data: Partial<API.Agent>): Promise<API.Agent> => {
   throw new Error('Not implemented - use mock client');
 };
 
-export const listAgentRuns = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.AgentRun>> => {
+export const listAgentRuns_old = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.AgentRun>> => {
   throw new Error('Not implemented - use mock client');
 };
 
-export const startAgentRun = async (agentId: string, projectId: string | undefined, input: string): Promise<API.AgentRun> => {
+export const startAgentRun_old = async (agentId: string, projectId: string | undefined, input: string): Promise<API.AgentRun> => {
   throw new Error('Not implemented - use mock client');
 };
 

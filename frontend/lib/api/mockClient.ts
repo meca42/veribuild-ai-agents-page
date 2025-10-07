@@ -1101,111 +1101,261 @@ export const updateInspectionItem = async (
   });
 };
 
-export const listAgents = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.Agent>> => {
+// Tools
+export const listTools = async (orgId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Tool>> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    let agents = projectId ? db.agents.filter((a) => a.projectId === projectId) : db.agents;
+    let tools = db.tools.filter((t) => t.orgId === orgId);
 
     if (params.q) {
-      agents = applySearch(agents, params.q, ['name', 'description']);
+      tools = applySearch(tools, params.q, ['name', 'description']);
     }
 
-    if (params.status) {
-      agents = agents.filter((a) => a.status === params.status);
-    }
-
-    if (params.sortBy) {
-      agents = applySort(agents, params.sortBy, params.sortDir || 'asc');
-    }
-
-    return createPaginatedResponse(agents, params);
+    return createPaginatedResponse(tools, params);
   });
 };
 
-export const createAgent = async (projectId: string | undefined, data: Partial<API.Agent>): Promise<API.Agent> => {
+export const createTool = async (orgId: string, data: Partial<API.Tool>): Promise<API.Tool> => {
   return simulateLatency(() => {
     const db = getDatabase();
+    const tool: API.Tool = {
+      id: generateId('tool'),
+      orgId,
+      name: data.name || 'Untitled Tool',
+      version: data.version || '1.0.0',
+      description: data.description,
+      inputSchema: data.inputSchema || {},
+      outputSchema: data.outputSchema,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date(),
+    };
+    db.tools.push(tool);
+    return tool;
+  });
+};
+
+export const updateTool = async (toolId: string, data: Partial<API.Tool>): Promise<API.Tool> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.tools.findIndex((t) => t.id === toolId);
+    if (index === -1) throw new Error('Tool not found');
+    
+    db.tools[index] = {
+      ...db.tools[index],
+      ...data,
+    };
+    return db.tools[index];
+  });
+};
+
+// Agents
+export const listAgents = async (params: { 
+  orgId: string; 
+  projectId?: string; 
+  q?: string; 
+  page?: number; 
+  pageSize?: number 
+}): Promise<PaginatedResponse<API.Agent>> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    let agents = db.agents.filter((a) => a.orgId === params.orgId);
+
+    if (params.projectId) {
+      agents = agents.filter((a) => a.projectId === params.projectId);
+    }
+
+    if (params.q) {
+      agents = applySearch(agents, params.q, ['name', 'systemPrompt']);
+    }
+
+    return createPaginatedResponse(agents, { 
+      page: params.page, 
+      pageSize: params.pageSize 
+    });
+  });
+};
+
+export const getAgent = async (agentId: string): Promise<API.Agent> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const agent = db.agents.find((a) => a.id === agentId);
+    if (!agent) throw new Error('Agent not found');
+    return agent;
+  });
+};
+
+export const createAgent = async (orgId: string, data: { 
+  projectId?: string; 
+  name: string; 
+  model: string; 
+  systemPrompt?: string; 
+  temperature?: number; 
+  toolPolicy?: API.ToolPolicy; 
+  maxSteps?: number;
+  toolIds?: string[];
+}): Promise<API.Agent> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    
+    const tools = data.toolIds 
+      ? db.tools.filter((t) => data.toolIds!.includes(t.id))
+      : [];
+
     const agent: API.Agent = {
       id: generateId('agent'),
-      projectId,
-      name: data.name || 'Untitled Agent',
-      description: data.description,
-      status: data.status || 'active',
-      allowedTools: data.allowedTools || [],
+      orgId,
+      projectId: data.projectId,
+      name: data.name,
+      model: data.model,
+      systemPrompt: data.systemPrompt,
+      temperature: data.temperature || 0.2,
+      toolPolicy: data.toolPolicy || 'balanced',
+      maxSteps: data.maxSteps || 16,
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
+      tools,
+      toolCount: tools.length,
     };
     db.agents.push(agent);
     return agent;
   });
 };
 
-export const updateAgent = async (id: string, data: Partial<API.Agent>): Promise<API.Agent> => {
+export const updateAgent = async (agentId: string, data: Partial<API.Agent> & { toolIds?: string[] }): Promise<API.Agent> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    const index = db.agents.findIndex((a) => a.id === id);
+    const index = db.agents.findIndex((a) => a.id === agentId);
     if (index === -1) throw new Error('Agent not found');
     
+    let tools = db.agents[index].tools;
+    if (data.toolIds) {
+      tools = db.tools.filter((t) => data.toolIds!.includes(t.id));
+    }
+
     db.agents[index] = {
       ...db.agents[index],
       ...data,
+      tools,
+      toolCount: tools?.length || 0,
       updatedAt: new Date(),
     };
     return db.agents[index];
   });
 };
 
-export const listAgentRuns = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.AgentRun>> => {
+// Agent Runs
+export const listAgentRuns = async (params: { 
+  orgId: string;
+  agentId?: string; 
+  projectId?: string; 
+  status?: API.AgentRunStatus;
+  page?: number; 
+  pageSize?: number;
+}): Promise<PaginatedResponse<API.AgentRun>> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    let runs = projectId ? db.agentRuns.filter((r) => r.projectId === projectId) : db.agentRuns;
+    let runs = db.agentRuns;
+
+    // Filter by org through agent
+    runs = runs.filter((r) => {
+      const agent = db.agents.find((a) => a.id === r.agentId);
+      return agent && agent.orgId === params.orgId;
+    });
 
     if (params.agentId) {
       runs = runs.filter((r) => r.agentId === params.agentId);
+    }
+
+    if (params.projectId) {
+      runs = runs.filter((r) => r.projectId === params.projectId);
     }
 
     if (params.status) {
       runs = runs.filter((r) => r.status === params.status);
     }
 
-    if (params.sortBy) {
-      runs = applySort(runs, params.sortBy, params.sortDir || 'asc');
-    }
-
-    return createPaginatedResponse(runs, params);
+    return createPaginatedResponse(runs, {
+      page: params.page,
+      pageSize: params.pageSize,
+    });
   });
 };
 
-export const startAgentRun = async (agentId: string, projectId: string | undefined, input: string): Promise<API.AgentRun> => {
+export const getAgentRun = async (runId: string): Promise<API.AgentRun> => {
   return simulateLatency(() => {
     const db = getDatabase();
+    const run = db.agentRuns.find((r) => r.id === runId);
+    if (!run) throw new Error('Run not found');
+    return run;
+  });
+};
+
+export const startAgentRun = async (agentId: string, input: string, projectId?: string): Promise<API.AgentRun> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const agent = db.agents.find((a) => a.id === agentId);
+    
     const run: API.AgentRun = {
       id: generateId('run'),
       agentId,
       projectId,
-      status: 'running',
+      startedBy: 'Current User',
+      trigger: 'ui',
       input,
-      output: undefined,
+      status: 'running',
       startedAt: new Date(),
-      completedAt: undefined,
-      duration: undefined,
-      tokensUsed: undefined,
-      trace: undefined,
+      createdAt: new Date(),
+      agentName: agent?.name,
+      messages: [
+        {
+          id: generateId('msg'),
+          runId: generateId('run'),
+          role: 'user',
+          content: input,
+          seq: 0,
+          createdAt: new Date(),
+        },
+      ],
+      toolCalls: [],
     };
     db.agentRuns.push(run);
     
+    // Simulate async completion
     setTimeout(() => {
       const index = db.agentRuns.findIndex((r) => r.id === run.id);
       if (index !== -1) {
-        db.agentRuns[index].status = 'completed';
-        db.agentRuns[index].output = 'Mock agent output';
-        db.agentRuns[index].completedAt = new Date();
-        db.agentRuns[index].duration = 3000;
-        db.agentRuns[index].tokensUsed = 150;
+        db.agentRuns[index].status = 'succeeded';
+        db.agentRuns[index].finishedAt = new Date();
+        db.agentRuns[index].latencyMs = 3000;
+        db.agentRuns[index].resultSummary = 'Agent task completed successfully';
+        db.agentRuns[index].messages?.push({
+          id: generateId('msg'),
+          runId: run.id,
+          role: 'assistant',
+          content: 'Task completed successfully',
+          seq: 1,
+          createdAt: new Date(),
+        });
       }
     }, 3000);
     
     return run;
+  });
+};
+
+export const cancelAgentRun = async (runId: string): Promise<API.AgentRun> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.agentRuns.findIndex((r) => r.id === runId);
+    if (index === -1) throw new Error('Run not found');
+    
+    if (db.agentRuns[index].status === 'running') {
+      db.agentRuns[index].status = 'cancelled';
+      db.agentRuns[index].finishedAt = new Date();
+    }
+    
+    return db.agentRuns[index];
   });
 };
 
