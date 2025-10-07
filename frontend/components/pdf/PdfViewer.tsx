@@ -1,17 +1,12 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
-import * as pdfjsLib from 'pdfjs-dist';
 
 interface PdfViewerProps {
   fileUrl: string;
 }
 
 export default function PdfViewer({ fileUrl }: PdfViewerProps) {
-  useEffect(() => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-  }, []);
-
   const defaultLayoutPluginInstance = useMemo(() => defaultLayoutPlugin(), []);
 
   if (!fileUrl) {
@@ -24,7 +19,7 @@ export default function PdfViewer({ fileUrl }: PdfViewerProps) {
 
   return (
     <div style={{ height: '100%', width: '100%', minHeight: 480 }}>
-      <Worker workerUrl={`https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`}>
+      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
         <Viewer fileUrl={fileUrl} plugins={[defaultLayoutPluginInstance]} />
       </Worker>
     </div>
