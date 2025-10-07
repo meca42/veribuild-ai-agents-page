@@ -78,10 +78,10 @@ export default function DrawingPreviewDrawer({
 
   return (
     <Drawer
-      open={open}
+      isOpen={open}
       onClose={onClose}
       title={title}
-      size={isFullscreen ? 'full' : 'xl'}
+      className={isFullscreen ? 'max-w-full w-full' : 'max-w-6xl'}
     >
       <div className="flex flex-col h-full">
         {/* Toolbar */}
