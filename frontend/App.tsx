@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import '@react-pdf-viewer/default-layout/lib/styles/index.css';
+import * as pdfjsLib from 'pdfjs-dist';
 import MarketingLayout from "./layouts/MarketingLayout";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 import AppLayout from "./layouts/AppLayout";
 import Home from "./pages/marketing/Home";
 import Login from "./pages/auth/Login";
