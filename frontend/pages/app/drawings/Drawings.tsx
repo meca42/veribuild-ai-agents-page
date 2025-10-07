@@ -220,14 +220,6 @@ export default function Drawings() {
     return matchesSearch && matchesDiscipline;
   });
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="text-center text-neutral-600">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
@@ -249,7 +241,12 @@ export default function Drawings() {
         projectId={projectId}
       />
 
-      <div className="p-6">
+      {isLoading ? (
+        <div className="p-6">
+          <div className="text-center text-neutral-600">Loading...</div>
+        </div>
+      ) : (
+        <div className="p-6">
         <div className="mb-6 flex gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
@@ -363,7 +360,8 @@ export default function Drawings() {
             onAction={() => setIsModalOpen(true)}
           />
         )}
-      </div>
+        </div>
+      )}
 
       <DrawingPreviewDrawer
         open={!!previewDrawing}
