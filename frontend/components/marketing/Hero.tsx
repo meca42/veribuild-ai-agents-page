@@ -47,7 +47,7 @@ export default function Hero() {
               className="text-base px-8 border-[var(--vb-neutral-600)] text-[var(--vb-neutral-600)] hover:bg-gray-50"
               asChild
             >
-              <a href="#overview" className="flex items-center gap-2">
+              <a href="#overview" className="flex items-center justify-center gap-2">
                 <Play className="h-4 w-4" />
                 Watch overview
               </a>
