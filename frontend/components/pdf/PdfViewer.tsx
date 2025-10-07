@@ -1,14 +1,13 @@
-import { useMemo } from 'react';
-import { Viewer, Worker } from '@react-pdf-viewer/core';
-import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
+'use client';
+import { Suspense, lazy } from 'react';
+
+const PdfViewerInternal = lazy(() => import('./PdfViewerInternal'));
 
 interface PdfViewerProps {
   fileUrl: string;
 }
 
 export default function PdfViewer({ fileUrl }: PdfViewerProps) {
-  const defaultLayoutPluginInstance = useMemo(() => defaultLayoutPlugin(), []);
-
   if (!fileUrl) {
     return (
       <div className="h-full w-full min-h-[480px] flex items-center justify-center">
@@ -18,10 +17,8 @@ export default function PdfViewer({ fileUrl }: PdfViewerProps) {
   }
 
   return (
-    <div style={{ height: '100%', width: '100%', minHeight: 480 }}>
-      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
-        <Viewer fileUrl={fileUrl} plugins={[defaultLayoutPluginInstance]} />
-      </Worker>
-    </div>
+    <Suspense fallback={<div style={{height: 480, display: 'grid', placeItems: 'center'}}>Loading PDF…</div>}>
+      <PdfViewerInternal fileUrl={fileUrl} />
+    </Suspense>
   );
 }

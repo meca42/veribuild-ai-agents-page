@@ -1,3 +1,4 @@
+'use client';
 import { useState, useEffect } from 'react';
 import { Maximize2, Download, X } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
@@ -39,7 +40,7 @@ export default function DrawingPreviewDrawer({
       setError(null);
 
       try {
-        const url = await api.getDrawingVersionFileUrl(versionId, 3600); // 1 hour expiry
+        const url = await api.getDrawingVersionFileUrl(versionId, 3600);
         if (!cancelled) {
           setSignedUrl(url);
         }

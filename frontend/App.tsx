@@ -1,6 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import '@react-pdf-viewer/core/lib/styles/index.css';
-import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import MarketingLayout from "./layouts/MarketingLayout";
 import AppLayout from "./layouts/AppLayout";
 import Home from "./pages/marketing/Home";
