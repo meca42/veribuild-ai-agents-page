@@ -417,3 +417,82 @@ This ensures:
 - Org-based access control via RLS
 - No filename conflicts
 - Easy cleanup when projects are deleted
+
+## PDF Viewer Setup
+
+The app uses React PDF Viewer for displaying construction drawings and documents.
+
+### Architecture
+
+**PdfViewerInternal.tsx**
+- Lazy-loaded component that imports `@react-pdf-viewer/core` and `@react-pdf-viewer/default-layout`
+- Wrapped in `<Worker>` component with CDN worker URL
+- Only renders on client-side (`typeof window !== 'undefined'`)
+- Uses `defaultLayoutPlugin` for toolbar and navigation
+
+**PdfViewer.tsx**
+- Wrapper component using React's `lazy()` and `<Suspense>`
+- Prevents server-side rendering issues
+- Shows loading state while PDF viewer loads
+
+**DrawingPreviewDrawer.tsx**
+- Fetches Supabase signed URL client-side via `useEffect`
+- Passes signed URL to `<PdfViewer>`
+- Handles loading and error states
+
+### Dependencies
+
+```json
+{
+  "react": "18.3.1",
+  "react-dom": "18.3.1",
+  "@react-pdf-viewer/core": "^3.12.0",
+  "@react-pdf-viewer/default-layout": "^3.12.0",
+  "pdfjs-dist": "^3.11.174"
+}
+```
+
+**IMPORTANT**: The `overrides` section in `package.json` ensures only one React instance:
+
+```json
+{
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
+```
+
+This prevents "Minified React error #300" (multiple React instances).
+
+### Worker Configuration
+
+The PDF.js worker is loaded from CDN:
+
+```typescript
+const workerUrl = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+```
+
+**Version must match** `pdfjs-dist` package version.
+
+### Troubleshooting
+
+**"Minified React error #300"**
+- Cause: Multiple React versions in node_modules
+- Fix: Add `overrides` to package.json and reinstall dependencies
+- Verify: Check that `PdfViewerInternal.tsx` doesn't have `'use client'` directive (Vite doesn't use it)
+
+**PDF doesn't render**
+- Check browser console for worker errors
+- Verify signed URL is valid (not expired)
+- Ensure worker URL matches pdfjs-dist version
+- Check that file is a valid PDF
+
+**Toolbar missing**
+- Verify `@react-pdf-viewer/default-layout` styles are imported
+- Check that `defaultLayoutPlugin()` is passed to `<Viewer>`
+
+**Performance issues**
+- Large PDFs (>10MB) may be slow to load
+- Consider adding page-by-page rendering
+- Use signed URL expiry to prevent stale URLs

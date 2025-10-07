@@ -1,4 +1,3 @@
-'use client';
 import { Suspense, lazy } from 'react';
 
 const PdfViewerInternal = lazy(() => import('./PdfViewerInternal'));
@@ -17,7 +16,16 @@ export default function PdfViewer({ fileUrl }: PdfViewerProps) {
   }
 
   return (
-    <Suspense fallback={<div style={{height: 480, display: 'grid', placeItems: 'center'}}>Loading PDF…</div>}>
+    <Suspense 
+      fallback={
+        <div className="h-full w-full min-h-[480px] flex items-center justify-center bg-neutral-50">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+            <p className="text-sm text-neutral-500">Loading PDF viewer…</p>
+          </div>
+        </div>
+      }
+    >
       <PdfViewerInternal fileUrl={fileUrl} />
     </Suspense>
   );
