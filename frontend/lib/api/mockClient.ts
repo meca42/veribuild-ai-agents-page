@@ -1439,3 +1439,18 @@ export const deleteWebhook = async (id: string): Promise<void> => {
     db.webhooks.splice(index, 1);
   });
 };
+
+// File signed URL helpers (mock)
+export const getFileSignedUrl = async (fileId: string, expiresIn: number = 3600): Promise<string> => {
+  return simulateLatency(() => {
+    // In mock mode, return a placeholder URL
+    return `https://mock-storage.example.com/files/${fileId}?expires=${expiresIn}`;
+  });
+};
+
+export const getDrawingVersionFileUrl = async (versionId: string, expiresIn: number = 3600): Promise<string> => {
+  return simulateLatency(() => {
+    // In mock mode, return a sample PDF URL for testing
+    return `https://pdfobject.com/pdf/sample.pdf`;
+  });
+};

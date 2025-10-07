@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Upload, Search, Image as ImageIcon } from "lucide-react";
+import { Upload, Search, Image as ImageIcon, Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
 import UploadDrawingModal, { type DrawingFormData } from "@/components/app/UploadDrawingModal";
+import DrawingPreviewDrawer from "@/components/pdf/DrawingPreviewDrawer";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import type * as API from "@/lib/api/types";
@@ -38,6 +39,11 @@ export default function Drawings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [disciplineFilter, setDisciplineFilter] = useState<string>("all");
   const [selectedProject, setSelectedProject] = useState<string>("all");
+  const [previewDrawing, setPreviewDrawing] = useState<{
+    versionId: string;
+    number: string;
+    version: number;
+  } | null>(null);
 
   useEffect(() => {
     const fetchDrawings = async () => {
@@ -48,7 +54,17 @@ export default function Drawings() {
         const supabase = (await import('@/lib/supabase/client')).createBrowserClient();
         if (!supabase) throw new Error('Supabase not configured');
 
-        let query = supabase.from('drawings').select('*');
+        let query = supabase
+          .from('drawings')
+          .select(`
+            *,
+            versions:drawing_versions(
+              id,
+              version,
+              revision,
+              file_id
+            )
+          `);
 
         if (projectId) {
           query = query.eq('project_id', projectId);
@@ -80,7 +96,17 @@ export default function Drawings() {
           status: 'approved' as const,
           currentVersion: d.current_version || 1,
           currentRevision: '1',
-          versions: [],
+          versions: (d.versions || [])
+            .sort((a: any, b: any) => b.version - a.version)
+            .map((v: any) => ({
+              id: v.id,
+              version: v.version,
+              revision: v.revision || '',
+              fileId: v.file_id,
+              fileName: '',
+              uploadedBy: '',
+              uploadedAt: new Date(),
+            })),
           createdAt: new Date(d.created_at),
           updatedAt: new Date(d.updated_at || d.created_at),
         })));
@@ -272,32 +298,59 @@ export default function Drawings() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                     Date
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
-                {filteredDrawings.map((drawing) => (
-                  <tr key={drawing.id} className="hover:bg-neutral-50 transition-colors cursor-pointer">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <ImageIcon size={20} className="text-neutral-400" />
-                        <span className="text-sm font-medium text-neutral-900">{drawing.title || drawing.number}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono text-neutral-900">{drawing.number}</td>
-                    <td className="px-6 py-4">
-                      <Badge>
-                        {drawing.discipline || 'N/A'}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge>Current</Badge>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-neutral-600">{drawing.currentVersion || 1}</td>
-                    <td className="px-6 py-4 text-sm text-neutral-600">
-                      {drawing.createdAt ? new Date(drawing.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredDrawings.map((drawing) => {
+                  const latestVersion = drawing.versions && drawing.versions.length > 0 
+                    ? drawing.versions[0] 
+                    : null;
+                  
+                  return (
+                    <tr key={drawing.id} className="hover:bg-neutral-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <ImageIcon size={20} className="text-neutral-400" />
+                          <span className="text-sm font-medium text-neutral-900">{drawing.title || drawing.number}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-neutral-900">{drawing.number}</td>
+                      <td className="px-6 py-4">
+                        <Badge>
+                          {drawing.discipline || 'N/A'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge>Current</Badge>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-neutral-600">{drawing.currentVersion || 1}</td>
+                      <td className="px-6 py-4 text-sm text-neutral-600">
+                        {drawing.createdAt ? new Date(drawing.createdAt).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4">
+                        {latestVersion ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setPreviewDrawing({
+                              versionId: latestVersion.id,
+                              number: drawing.number,
+                              version: latestVersion.version,
+                            })}
+                          >
+                            <Eye size={16} />
+                            Preview
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-neutral-400">No file</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -311,6 +364,14 @@ export default function Drawings() {
           />
         )}
       </div>
+
+      <DrawingPreviewDrawer
+        open={!!previewDrawing}
+        onClose={() => setPreviewDrawing(null)}
+        versionId={previewDrawing?.versionId}
+        drawingNumber={previewDrawing?.number}
+        versionNumber={previewDrawing?.version}
+      />
     </div>
   );
 }

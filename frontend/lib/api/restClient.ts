@@ -2835,3 +2835,39 @@ export const getStepReferences = async (stepId: string): Promise<any[]> => {
   
   return data || [];
 };
+
+// File signed URL helpers
+export const getFileSignedUrl = async (fileId: string, expiresIn: number = 3600): Promise<string> => {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('files')
+    .select('bucket, path')
+    .eq('id', fileId)
+    .single();
+
+  if (error || !data) throw error ?? new Error('File not found');
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from(data.bucket)
+    .createSignedUrl(data.path, expiresIn);
+
+  if (signError) throw signError;
+  if (!signed?.signedUrl) throw new Error('Failed to create signed URL');
+
+  return signed.signedUrl;
+};
+
+export const getDrawingVersionFileUrl = async (versionId: string, expiresIn: number = 3600): Promise<string> => {
+  const supabase = getSupabase();
+  
+  const { data: version, error: versionError } = await supabase
+    .from('drawing_versions')
+    .select('file_id')
+    .eq('id', versionId)
+    .single();
+
+  if (versionError || !version) throw versionError ?? new Error('Drawing version not found');
+
+  return getFileSignedUrl(version.file_id, expiresIn);
+};
