@@ -34,6 +34,10 @@ const BROWSER = typeof globalThis === "object" && ("window" in globalThis);
  */
 export class Client {
     public readonly agents: agents.ServiceClient
+    public readonly configs: configs.ServiceClient
+    public readonly phases: phases.ServiceClient
+    public readonly rfis: rfis.ServiceClient
+    public readonly steps: steps.ServiceClient
     private readonly options: ClientOptions
     private readonly target: string
 
@@ -49,6 +53,10 @@ export class Client {
         this.options = options ?? {}
         const base = new BaseClient(this.target, this.options)
         this.agents = new agents.ServiceClient(base)
+        this.configs = new configs.ServiceClient(base)
+        this.phases = new phases.ServiceClient(base)
+        this.rfis = new rfis.ServiceClient(base)
+        this.steps = new steps.ServiceClient(base)
     }
 
     /**
@@ -88,6 +96,7 @@ import { getRun as api_agents_get_run_getRun } from "~backend/agents/get-run";
 import { listProjectRuns as api_agents_list_project_runs_listProjectRuns } from "~backend/agents/list-project-runs";
 import { listRuns as api_agents_list_runs_listRuns } from "~backend/agents/list-runs";
 import { startRun as api_agents_start_run_startRun } from "~backend/agents/start-run";
+import { streamRun as api_agents_stream_streamRun } from "~backend/agents/stream";
 
 export namespace agents {
 
@@ -102,6 +111,7 @@ export namespace agents {
             this.listProjectRuns = this.listProjectRuns.bind(this)
             this.listRuns = this.listRuns.bind(this)
             this.startRun = this.startRun.bind(this)
+            this.streamRun = this.streamRun.bind(this)
         }
 
         public async cancelRun(params: { runId: string }): Promise<ResponseType<typeof api_agents_cancel_run_cancelRun>> {
@@ -171,6 +181,426 @@ export namespace agents {
             // Now make the actual call to the API
             const resp = await this.baseClient.callTypedAPI(`/agents/${encodeURIComponent(params.agentId)}/runs`, {method: "POST", body: JSON.stringify(body)})
             return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_start_run_startRun>
+        }
+
+        public async streamRun(params: { runId: string }): Promise<ResponseType<typeof api_agents_stream_streamRun>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/runs/${encodeURIComponent(params.runId)}/stream`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_agents_stream_streamRun>
+        }
+    }
+}
+
+/**
+ * Import the endpoint handlers to derive the types for the client.
+ */
+import { createAgent as api_configs_create_agent_createAgent } from "~backend/configs/create-agent";
+import { createApiKey as api_configs_create_api_key_createApiKey } from "~backend/configs/create-api-key";
+import { deleteAgent as api_configs_delete_agent_deleteAgent } from "~backend/configs/delete-agent";
+import { deleteApiKey as api_configs_delete_api_key_deleteApiKey } from "~backend/configs/delete-api-key";
+import { listAgents as api_configs_list_agents_listAgents } from "~backend/configs/list-agents";
+import { listApiKeys as api_configs_list_api_keys_listApiKeys } from "~backend/configs/list-api-keys";
+import { updateAgent as api_configs_update_agent_updateAgent } from "~backend/configs/update-agent";
+
+export namespace configs {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.createAgent = this.createAgent.bind(this)
+            this.createApiKey = this.createApiKey.bind(this)
+            this.deleteAgent = this.deleteAgent.bind(this)
+            this.deleteApiKey = this.deleteApiKey.bind(this)
+            this.listAgents = this.listAgents.bind(this)
+            this.listApiKeys = this.listApiKeys.bind(this)
+            this.updateAgent = this.updateAgent.bind(this)
+        }
+
+        public async createAgent(params: RequestType<typeof api_configs_create_agent_createAgent>): Promise<ResponseType<typeof api_configs_create_agent_createAgent>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                "allowed_tools": params["allowed_tools"],
+                "cost_cap_usd":  params["cost_cap_usd"],
+                "max_steps":     params["max_steps"],
+                model:           params.model,
+                name:            params.name,
+                temperature:     params.temperature,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/agents`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_create_agent_createAgent>
+        }
+
+        public async createApiKey(params: RequestType<typeof api_configs_create_api_key_createApiKey>): Promise<ResponseType<typeof api_configs_create_api_key_createApiKey>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                createdBy: params.createdBy,
+                name:      params.name,
+                provider:  params.provider,
+                secret:    params.secret,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/api-keys`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_create_api_key_createApiKey>
+        }
+
+        public async deleteAgent(params: { orgId: string, agentId: string }): Promise<ResponseType<typeof api_configs_delete_agent_deleteAgent>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/agents/${encodeURIComponent(params.agentId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_delete_agent_deleteAgent>
+        }
+
+        public async deleteApiKey(params: { orgId: string, keyId: string }): Promise<ResponseType<typeof api_configs_delete_api_key_deleteApiKey>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/api-keys/${encodeURIComponent(params.keyId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_delete_api_key_deleteApiKey>
+        }
+
+        public async listAgents(params: { orgId: string }): Promise<ResponseType<typeof api_configs_list_agents_listAgents>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/agents`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_list_agents_listAgents>
+        }
+
+        public async listApiKeys(params: { orgId: string }): Promise<ResponseType<typeof api_configs_list_api_keys_listApiKeys>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/api-keys`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_list_api_keys_listApiKeys>
+        }
+
+        public async updateAgent(params: RequestType<typeof api_configs_update_agent_updateAgent>): Promise<ResponseType<typeof api_configs_update_agent_updateAgent>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                "allowed_tools": params["allowed_tools"],
+                "cost_cap_usd":  params["cost_cap_usd"],
+                "max_steps":     params["max_steps"],
+                model:           params.model,
+                name:            params.name,
+                temperature:     params.temperature,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/orgs/${encodeURIComponent(params.orgId)}/agents/${encodeURIComponent(params.agentId)}`, {method: "PATCH", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_configs_update_agent_updateAgent>
+        }
+    }
+}
+
+/**
+ * Import the endpoint handlers to derive the types for the client.
+ */
+import { createPhase as api_phases_create_phase_createPhase } from "~backend/phases/create-phase";
+import { deletePhase as api_phases_delete_phase_deletePhase } from "~backend/phases/delete-phase";
+import { listPhases as api_phases_list_phases_listPhases } from "~backend/phases/list-phases";
+import { reorderPhases as api_phases_reorder_phases_reorderPhases } from "~backend/phases/reorder-phases";
+import { updatePhase as api_phases_update_phase_updatePhase } from "~backend/phases/update-phase";
+
+export namespace phases {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.createPhase = this.createPhase.bind(this)
+            this.deletePhase = this.deletePhase.bind(this)
+            this.listPhases = this.listPhases.bind(this)
+            this.reorderPhases = this.reorderPhases.bind(this)
+            this.updatePhase = this.updatePhase.bind(this)
+        }
+
+        public async createPhase(params: RequestType<typeof api_phases_create_phase_createPhase>): Promise<ResponseType<typeof api_phases_create_phase_createPhase>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                description: params.description,
+                name:        params.name,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/phases`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_phases_create_phase_createPhase>
+        }
+
+        public async deletePhase(params: { projectId: string, phaseId: string }): Promise<ResponseType<typeof api_phases_delete_phase_deletePhase>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/phases/${encodeURIComponent(params.phaseId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_phases_delete_phase_deletePhase>
+        }
+
+        public async listPhases(params: { projectId: string }): Promise<ResponseType<typeof api_phases_list_phases_listPhases>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/phases`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_phases_list_phases_listPhases>
+        }
+
+        public async reorderPhases(params: RequestType<typeof api_phases_reorder_phases_reorderPhases>): Promise<ResponseType<typeof api_phases_reorder_phases_reorderPhases>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                order: params.order,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/phases/reorder`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_phases_reorder_phases_reorderPhases>
+        }
+
+        public async updatePhase(params: RequestType<typeof api_phases_update_phase_updatePhase>): Promise<ResponseType<typeof api_phases_update_phase_updatePhase>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                description: params.description,
+                name:        params.name,
+                status:      params.status,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/phases/${encodeURIComponent(params.phaseId)}`, {method: "PATCH", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_phases_update_phase_updatePhase>
+        }
+    }
+}
+
+/**
+ * Import the endpoint handlers to derive the types for the client.
+ */
+import { answerRFI as api_rfis_answer_rfi_answerRFI } from "~backend/rfis/answer-rfi";
+import { closeRFI as api_rfis_close_rfi_closeRFI } from "~backend/rfis/close-rfi";
+import { createAttachment as api_rfis_create_attachment_createAttachment } from "~backend/rfis/create-attachment";
+import { createRFI as api_rfis_create_rfi_createRFI } from "~backend/rfis/create-rfi";
+import { deleteAttachment as api_rfis_delete_attachment_deleteAttachment } from "~backend/rfis/delete-attachment";
+import { deleteRFI as api_rfis_delete_rfi_deleteRFI } from "~backend/rfis/delete-rfi";
+import { getRFI as api_rfis_get_rfi_getRFI } from "~backend/rfis/get-rfi";
+import { getUploadUrl as api_rfis_get_upload_url_getUploadUrl } from "~backend/rfis/get-upload-url";
+import { listAttachments as api_rfis_list_attachments_listAttachments } from "~backend/rfis/list-attachments";
+import { listRFIs as api_rfis_list_rfis_listRFIs } from "~backend/rfis/list-rfis";
+import { reopenRFI as api_rfis_reopen_rfi_reopenRFI } from "~backend/rfis/reopen-rfi";
+import { updateRFI as api_rfis_update_rfi_updateRFI } from "~backend/rfis/update-rfi";
+
+export namespace rfis {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.answerRFI = this.answerRFI.bind(this)
+            this.closeRFI = this.closeRFI.bind(this)
+            this.createAttachment = this.createAttachment.bind(this)
+            this.createRFI = this.createRFI.bind(this)
+            this.deleteAttachment = this.deleteAttachment.bind(this)
+            this.deleteRFI = this.deleteRFI.bind(this)
+            this.getRFI = this.getRFI.bind(this)
+            this.getUploadUrl = this.getUploadUrl.bind(this)
+            this.listAttachments = this.listAttachments.bind(this)
+            this.listRFIs = this.listRFIs.bind(this)
+            this.reopenRFI = this.reopenRFI.bind(this)
+            this.updateRFI = this.updateRFI.bind(this)
+        }
+
+        public async answerRFI(params: RequestType<typeof api_rfis_answer_rfi_answerRFI>): Promise<ResponseType<typeof api_rfis_answer_rfi_answerRFI>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                answer:     params.answer,
+                answeredBy: params.answeredBy,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/answer`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_answer_rfi_answerRFI>
+        }
+
+        public async closeRFI(params: { projectId: string, rfiId: string }): Promise<ResponseType<typeof api_rfis_close_rfi_closeRFI>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/close`, {method: "POST", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_close_rfi_closeRFI>
+        }
+
+        public async createAttachment(params: RequestType<typeof api_rfis_create_attachment_createAttachment>): Promise<ResponseType<typeof api_rfis_create_attachment_createAttachment>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                bucket:      params.bucket,
+                contentType: params.contentType,
+                filename:    params.filename,
+                path:        params.path,
+                sizeBytes:   params.sizeBytes,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/attachments`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_create_attachment_createAttachment>
+        }
+
+        public async createRFI(params: RequestType<typeof api_rfis_create_rfi_createRFI>): Promise<ResponseType<typeof api_rfis_create_rfi_createRFI>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                assignedTo: params.assignedTo,
+                drawingId:  params.drawingId,
+                dueDate:    params.dueDate,
+                priority:   params.priority,
+                question:   params.question,
+                subject:    params.subject,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_create_rfi_createRFI>
+        }
+
+        public async deleteAttachment(params: { projectId: string, rfiId: string, attachmentId: string }): Promise<ResponseType<typeof api_rfis_delete_attachment_deleteAttachment>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/attachments/${encodeURIComponent(params.attachmentId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_delete_attachment_deleteAttachment>
+        }
+
+        public async deleteRFI(params: { projectId: string, rfiId: string }): Promise<ResponseType<typeof api_rfis_delete_rfi_deleteRFI>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_delete_rfi_deleteRFI>
+        }
+
+        public async getRFI(params: { projectId: string, rfiId: string }): Promise<ResponseType<typeof api_rfis_get_rfi_getRFI>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_get_rfi_getRFI>
+        }
+
+        public async getUploadUrl(params: RequestType<typeof api_rfis_get_upload_url_getUploadUrl>): Promise<ResponseType<typeof api_rfis_get_upload_url_getUploadUrl>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                filename: params.filename,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/upload-url`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_get_upload_url_getUploadUrl>
+        }
+
+        public async listAttachments(params: { projectId: string, rfiId: string }): Promise<ResponseType<typeof api_rfis_list_attachments_listAttachments>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/attachments`, {method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_list_attachments_listAttachments>
+        }
+
+        public async listRFIs(params: RequestType<typeof api_rfis_list_rfis_listRFIs>): Promise<ResponseType<typeof api_rfis_list_rfis_listRFIs>> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                assignedTo: params.assignedTo,
+                dueFrom:    params.dueFrom,
+                dueTo:      params.dueTo,
+                q:          params.q,
+                status:     params.status,
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis`, {query, method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_list_rfis_listRFIs>
+        }
+
+        public async reopenRFI(params: { projectId: string, rfiId: string }): Promise<ResponseType<typeof api_rfis_reopen_rfi_reopenRFI>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}/reopen`, {method: "POST", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_reopen_rfi_reopenRFI>
+        }
+
+        public async updateRFI(params: RequestType<typeof api_rfis_update_rfi_updateRFI>): Promise<ResponseType<typeof api_rfis_update_rfi_updateRFI>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                assignedTo: params.assignedTo,
+                drawingId:  params.drawingId,
+                dueDate:    params.dueDate,
+                priority:   params.priority,
+                question:   params.question,
+                status:     params.status,
+                subject:    params.subject,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/rfis/${encodeURIComponent(params.rfiId)}`, {method: "PATCH", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_rfis_update_rfi_updateRFI>
+        }
+    }
+}
+
+/**
+ * Import the endpoint handlers to derive the types for the client.
+ */
+import { createStep as api_steps_create_step_createStep } from "~backend/steps/create-step";
+import { deleteStep as api_steps_delete_step_deleteStep } from "~backend/steps/delete-step";
+import { listSteps as api_steps_list_steps_listSteps } from "~backend/steps/list-steps";
+import { toggleCheckitem as api_steps_toggle_checkitem_toggleCheckitem } from "~backend/steps/toggle-checkitem";
+import { updateStep as api_steps_update_step_updateStep } from "~backend/steps/update-step";
+
+export namespace steps {
+
+    export class ServiceClient {
+        private baseClient: BaseClient
+
+        constructor(baseClient: BaseClient) {
+            this.baseClient = baseClient
+            this.createStep = this.createStep.bind(this)
+            this.deleteStep = this.deleteStep.bind(this)
+            this.listSteps = this.listSteps.bind(this)
+            this.toggleCheckitem = this.toggleCheckitem.bind(this)
+            this.updateStep = this.updateStep.bind(this)
+        }
+
+        public async createStep(params: RequestType<typeof api_steps_create_step_createStep>): Promise<ResponseType<typeof api_steps_create_step_createStep>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                checklist:   params.checklist,
+                description: params.description,
+                phaseId:     params.phaseId,
+                status:      params.status,
+                title:       params.title,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/steps`, {method: "POST", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_steps_create_step_createStep>
+        }
+
+        public async deleteStep(params: { projectId: string, stepId: string }): Promise<ResponseType<typeof api_steps_delete_step_deleteStep>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/steps/${encodeURIComponent(params.stepId)}`, {method: "DELETE", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_steps_delete_step_deleteStep>
+        }
+
+        public async listSteps(params: RequestType<typeof api_steps_list_steps_listSteps>): Promise<ResponseType<typeof api_steps_list_steps_listSteps>> {
+            // Convert our params into the objects we need for the request
+            const query = makeRecord<string, string | string[]>({
+                phaseId: params.phaseId,
+                q:       params.q,
+                status:  params.status,
+            })
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/steps`, {query, method: "GET", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_steps_list_steps_listSteps>
+        }
+
+        public async toggleCheckitem(params: { projectId: string, stepId: string, checkitemId: string }): Promise<ResponseType<typeof api_steps_toggle_checkitem_toggleCheckitem>> {
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/steps/${encodeURIComponent(params.stepId)}/checkitems/${encodeURIComponent(params.checkitemId)}/toggle`, {method: "POST", body: undefined})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_steps_toggle_checkitem_toggleCheckitem>
+        }
+
+        public async updateStep(params: RequestType<typeof api_steps_update_step_updateStep>): Promise<ResponseType<typeof api_steps_update_step_updateStep>> {
+            // Construct the body with only the fields which we want encoded within the body (excluding query string or header fields)
+            const body: Record<string, any> = {
+                assigneeId:  params.assigneeId,
+                description: params.description,
+                phaseId:     params.phaseId,
+                priority:    params.priority,
+                status:      params.status,
+                title:       params.title,
+            }
+
+            // Now make the actual call to the API
+            const resp = await this.baseClient.callTypedAPI(`/projects/${encodeURIComponent(params.projectId)}/steps/${encodeURIComponent(params.stepId)}`, {method: "PATCH", body: JSON.stringify(body)})
+            return JSON.parse(await resp.text(), dateReviver) as ResponseType<typeof api_steps_update_step_updateStep>
         }
     }
 }
