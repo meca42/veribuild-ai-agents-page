@@ -16,6 +16,9 @@ type AgentRow = {
   model: string;
   max_steps?: number | null;
   system_prompt?: string | null;
+  temperature?: number | null;
+  cost_cap_usd?: number | null;
+  allowed_tools?: string[] | null;
 };
 
 const MAX_STEPS_DEFAULT = 6;
@@ -106,7 +109,7 @@ export async function runAgent({
 
   const { data: agent, error: agentError } = await supabase
     .from('agents')
-    .select('id, model, max_steps, system_prompt')
+    .select('id, model, max_steps, system_prompt, temperature, cost_cap_usd, allowed_tools')
     .eq('id', run.agent_id)
     .single<AgentRow>();
 
@@ -128,9 +131,18 @@ export async function runAgent({
     return;
   }
 
+  await supabase.from('agent_audit').insert({
+    run_id: runId,
+    event: 'run.start',
+    meta: { project_id: run.project_id }
+  });
+
   const provider = getProvider(openaiKey);
   const model = agent.model || 'gpt-4o-mini';
+  const temperature = agent.temperature ?? 0.2;
   const maxSteps = agent.max_steps ?? MAX_STEPS_DEFAULT;
+  const costCap = Number(agent.cost_cap_usd ?? 5);
+  const allowedTools = (agent.allowed_tools ?? ['search_drawings', 'query_inventory', 'create_rfi']) as string[];
 
   if (agent.system_prompt) {
     await appendMessage(runId, 'system', agent.system_prompt);
@@ -162,9 +174,9 @@ export async function runAgent({
             content: m.content,
             name: m.tool_name ?? undefined,
           })),
-          tools: toolSpecsForLlm(),
+          tools: toolSpecsForLlm().filter(t => allowedTools.includes(t.name)),
           tool_choice: 'auto',
-          temperature: 0.2,
+          temperature,
           max_tokens: 800,
         }),
         new Promise<never>((_, rej) =>
@@ -176,11 +188,34 @@ export async function runAgent({
         promptTokens += llmRes.usage.prompt_tokens ?? 0;
         completionTokens += llmRes.usage.completion_tokens ?? 0;
         costUSD += llmRes.usage.cost_usd ?? 0;
+
+        if (costUSD >= costCap) {
+          await supabase.from('agent_audit').insert({
+            run_id: runId,
+            event: 'caps.abort',
+            meta: { cost_usd: costUSD, cap: costCap }
+          });
+          await updateRun(runId, {
+            status: 'failed',
+            error: 'cost_cap',
+            finished_at: new Date().toISOString(),
+            usage_prompt_tokens: promptTokens,
+            usage_completion_tokens: completionTokens,
+            usage_total_tokens: promptTokens + completionTokens,
+            usage_cost_usd: Number(costUSD.toFixed(6)),
+          });
+          return;
+        }
       }
 
       if ((llmRes.toolCalls?.length ?? 0) === 0) {
         if (llmRes.content?.trim()) {
           await appendMessage(runId, 'assistant', llmRes.content.trim());
+          await supabase.from('agent_audit').insert({
+            run_id: runId,
+            event: 'run.succeed',
+            meta: { summary: llmRes.content.slice(0, 200) }
+          });
           await updateRun(runId, {
             status: 'succeeded',
             finished_at: new Date().toISOString(),
@@ -201,6 +236,15 @@ export async function runAgent({
       }
 
       for (const tc of llmRes.toolCalls!) {
+        if (!allowedTools.includes(tc.name)) {
+          await appendMessage(
+            runId,
+            'assistant',
+            `Tool ${tc.name} is not permitted for this agent.`
+          );
+          continue;
+        }
+
         const started = new Date();
         try {
           const args = JSON.parse(tc.arguments || '{}');
@@ -248,6 +292,11 @@ export async function runAgent({
       if (fresh?.status === 'cancelled') return;
     }
 
+    await supabase.from('agent_audit').insert({
+      run_id: runId,
+      event: 'run.fail',
+      meta: { error: 'max_steps_exceeded' }
+    });
     await updateRun(runId, {
       status: 'failed',
       error: 'max_steps_exceeded',
@@ -258,6 +307,11 @@ export async function runAgent({
       usage_cost_usd: Number(costUSD.toFixed(6)),
     });
   } catch (err: any) {
+    await supabase.from('agent_audit').insert({
+      run_id: runId,
+      event: 'run.fail',
+      meta: { error: err?.message ?? 'executor_error' }
+    });
     await updateRun(runId, {
       status: 'failed',
       error: err?.message ?? 'executor_error',

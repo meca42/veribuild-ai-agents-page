@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Building2, Key, Webhook, Shield, Save } from "lucide-react";
+import { User, Building2, Key, Webhook, Shield, Save, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,10 @@ export default function Settings() {
             <TabsTrigger value="organization">
               <Building2 size={16} className="mr-2" />
               Organization
+            </TabsTrigger>
+            <TabsTrigger value="agents">
+              <Bot size={16} className="mr-2" />
+              Agents
             </TabsTrigger>
             <TabsTrigger value="api-keys">
               <Key size={16} className="mr-2" />
@@ -135,6 +139,57 @@ export default function Settings() {
                   </Button>
                   <Button variant="outline">Cancel</Button>
                 </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="agents" className="mt-6">
+            <div className="max-w-4xl bg-white rounded-lg border border-neutral-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-neutral-900">Agent Configurations</h3>
+                <Button className="bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
+                  Create Agent
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="p-4 border border-neutral-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-sm font-medium text-neutral-900">Default Assistant</div>
+                      <div className="text-xs text-neutral-500 mt-1">General purpose construction agent</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm">Edit</Button>
+                      <Button variant="outline" size="sm">Delete</Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <span className="text-neutral-500">Model:</span>
+                      <div className="font-medium text-neutral-900 mt-1">gpt-4o-mini</div>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500">Max Steps:</span>
+                      <div className="font-medium text-neutral-900 mt-1">6</div>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500">Cost Cap:</span>
+                      <div className="font-medium text-neutral-900 mt-1">$5.00</div>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500">Tools:</span>
+                      <div className="font-medium text-neutral-900 mt-1">3 enabled</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="text-sm font-medium text-blue-900 mb-2">About Agent Configs</h4>
+                <p className="text-sm text-blue-800">
+                  Configure AI agents with custom models, cost limits, and allowed tools. Each agent can be fine-tuned for specific project needs.
+                </p>
               </div>
             </div>
           </TabsContent>

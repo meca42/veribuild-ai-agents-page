@@ -1,5 +1,7 @@
 import type { ToolDef, ToolCtx, ToolResult } from './types';
 import { search_drawings, query_inventory, create_rfi } from './handlers';
+import { schemas, retry } from './validation';
+import { createServiceClient } from '../supabase';
 
 const stringSchema = (desc: string) => ({
   type: 'string',
@@ -66,7 +68,42 @@ export async function runToolByName(
   if (!def) {
     return { ok: false, error: `unknown tool: ${name}` };
   }
-  return def.handler(args, ctx);
+
+  const schema = schemas[name as keyof typeof schemas];
+  if (!schema) {
+    return { ok: false, error: `no validation schema for tool: ${name}` };
+  }
+
+  const validation = schema.validate(args);
+  if (!validation.valid) {
+    return { ok: false, error: validation.error || 'validation failed' };
+  }
+
+  const started = Date.now();
+  
+  try {
+    const result = await retry(async () => {
+      return await def.handler(validation.data, ctx);
+    }, 2);
+
+    const elapsed = Date.now() - started;
+    const supabase = createServiceClient();
+    await supabase.from('agent_audit').insert({
+      run_id: ctx.runId,
+      event: 'tool.call',
+      meta: { name, ms: elapsed }
+    });
+
+    return result;
+  } catch (e: any) {
+    const supabase = createServiceClient();
+    await supabase.from('agent_audit').insert({
+      run_id: ctx.runId,
+      event: 'tool.error',
+      meta: { name, error: e?.message ?? 'tool_error' }
+    });
+    return { ok: false, error: e?.message ?? 'tool execution failed' };
+  }
 }
 
 export * from './types';

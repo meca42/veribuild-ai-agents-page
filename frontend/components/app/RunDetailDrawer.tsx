@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { cancelRun, RunStatus } from '@/lib/api/agents';
-import { useRunPolling } from '@/lib/hooks/useRunPolling';
+import { useRunStream } from '@/lib/hooks/useRunStream';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/ui/cn';
@@ -29,8 +29,16 @@ function StatusBadge({ status }: { status: RunStatus }) {
 }
 
 export default function RunDetailDrawer({ isOpen, onClose, runId }: RunDetailDrawerProps) {
-  const { run, messages, tool_calls, progress, loading, error } = useRunPolling(runId);
+  const { snapshot, status, isLoading } = useRunStream(runId);
   const [canceling, setCanceling] = useState(false);
+
+  const run = snapshot?.run;
+  const messages = snapshot?.messages || [];
+  const tool_calls = snapshot?.tool_calls || [];
+  
+  const currentStatus = status?.status || run?.status;
+  const progress = run?.status === 'running' ? 50 : run?.status === 'succeeded' ? 100 : 0;
+  const error = run?.status === 'failed' ? run?.error : null;
 
   const canCancel = run && (run.status === 'running' || run.status === 'queued');
 
@@ -70,7 +78,7 @@ export default function RunDetailDrawer({ isOpen, onClose, runId }: RunDetailDra
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {run && <StatusBadge status={run.status} />}
+            {currentStatus && <StatusBadge status={currentStatus as RunStatus} />}
             {run && (
               <div className="text-xs text-neutral-500">
                 {progress}% complete
@@ -102,7 +110,7 @@ export default function RunDetailDrawer({ isOpen, onClose, runId }: RunDetailDra
                 <h3 className="font-medium text-neutral-900 dark:text-neutral-100">Messages</h3>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                {!run && !error && (
+                {isLoading && (
                   <div className="text-sm text-neutral-500">Loading messages...</div>
                 )}
                 {error && (
