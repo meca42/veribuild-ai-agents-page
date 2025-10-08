@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import PageHeader from "@/components/app/PageHeader";
 import { AgentDrawer } from "@/components/app/AgentDrawer";
-import { RunDetailDrawer } from "@/components/app/RunDetailDrawer";
+import RunDetailDrawer from "@/components/app/RunDetailDrawer";
 import { useProject } from "@/lib/hooks";
 
 const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
@@ -213,7 +213,7 @@ export default function ProjectDetail() {
       <RunDetailDrawer
         isOpen={isRunDetailOpen}
         onClose={() => setIsRunDetailOpen(false)}
-        runId={currentRunId}
+        runId={currentRunId || undefined}
       />
     </div>
   );

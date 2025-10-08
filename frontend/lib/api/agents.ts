@@ -1,12 +1,71 @@
 import React from 'react';
 import backend from '~backend/client';
 
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface AgentMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content: string;
+  seq: number;
+  created_at: string;
+  tool_name?: string | null;
+}
+
+export interface ToolCall {
+  id: string;
+  tool_id: string;
+  seq: number;
+  status: 'ok' | 'error';
+  input: any;
+  output?: any;
+  error?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+}
+
+export interface AgentRun {
+  id: string;
+  agent_id: string;
+  project_id: string;
+  status: RunStatus;
+  input: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  latency_ms?: number | null;
+  result_summary?: string | null;
+  error?: string | null;
+  created_at: string;
+}
+
+export interface GetRunResponse {
+  run: AgentRun;
+  messages: AgentMessage[];
+  tool_calls: ToolCall[];
+  progress: number;
+}
+
 export async function startRun(agentId: string, projectId: string, input: string) {
   return await backend.agents.startRun({ agentId, project_id: projectId, input });
 }
 
-export async function getRun(runId: string) {
-  return await backend.agents.getRun({ runId });
+export async function getRun(runId: string): Promise<GetRunResponse> {
+  const result = await backend.agents.getRun({ runId });
+  return {
+    ...result,
+    run: {
+      ...result.run,
+      status: result.run.status as RunStatus,
+    },
+    messages: result.messages.map(m => ({
+      ...m,
+      role: m.role as 'user' | 'assistant' | 'tool' | 'system',
+    })),
+    tool_calls: result.tool_calls.map(tc => ({
+      ...tc,
+      status: tc.status as 'ok' | 'error',
+    })),
+  };
 }
 
 export async function cancelRun(runId: string) {
