@@ -11,24 +11,27 @@ const integrations = [
 
 export default function Integrations() {
   return (
-    <section className="bg-white py-20 sm:py-28">
+    <section id="integrations" className="bg-[var(--vb-gray-100)] dark:bg-[var(--vb-gray-100)] py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[var(--vb-neutral-900)] sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-[var(--vb-gray-800)] dark:text-white sm:text-4xl">
             Integrations
           </h2>
-          <p className="mt-4 text-lg leading-8 text-[var(--vb-neutral-600)]">
+          <p className="mt-4 text-lg leading-8 text-[var(--vb-gray-600)] dark:text-slate-300">
             Secure APIs and webhooks to fit your stack
           </p>
         </div>
-        <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-4">
+        <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-4">
           {integrations.map((integration) => (
             <div
               key={integration.name}
-              className="flex items-center justify-center rounded-lg bg-gray-50 p-6 ring-1 ring-gray-200"
+              className="flex items-center justify-center rounded-lg bg-white dark:bg-white/5 p-6 
+                         border border-slate-200/60 dark:border-white/10
+                         shadow-[var(--vb-shadow-sm)] hover:shadow-[var(--vb-shadow-md)]
+                         transition-all duration-150 will-change-transform hover:-translate-y-0.5"
             >
-              <div className="h-12 w-20 bg-gray-200 rounded flex items-center justify-center">
-                <span className="text-xs text-gray-400">{integration.name}</span>
+              <div className="h-12 w-20 bg-[var(--vb-gray-200)] dark:bg-white/5 rounded flex items-center justify-center">
+                <span className="text-xs text-[var(--vb-gray-600)] dark:text-slate-400 font-medium">{integration.name}</span>
               </div>
             </div>
           ))}

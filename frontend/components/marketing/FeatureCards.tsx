@@ -5,6 +5,7 @@ const features = [
     name: "Drawings & Documents",
     description: "Versioned PDFs, IFC models, as-builts, and discipline-specific filters for instant reference at every step.",
     icon: FileText,
+    kicker: "Document Management",
     capabilities: [
       "Version control for all drawing revisions",
       "IFC and as-built model support",
@@ -15,6 +16,7 @@ const features = [
     name: "AI Agents",
     description: "Tool-calling agents that search drawings, answer spec questions, draft RFIs and submittals, and query inventory in natural language.",
     icon: Bot,
+    kicker: "Intelligent Automation",
     capabilities: [
       "Natural language queries across all documents",
       "Automated RFI and submittal generation",
@@ -25,6 +27,7 @@ const features = [
     name: "Phases & Steps",
     description: "Simple project-to-phase-to-step execution with assignments, checklists, and contextual references.",
     icon: ListChecks,
+    kicker: "Project Planning",
     capabilities: [
       "Hierarchical project and phase organization",
       "Step-level assignments and checklists",
@@ -35,6 +38,7 @@ const features = [
     name: "Materials & Inventory",
     description: "BOM ingestion, delivery logging from photos, lot counts by zone—query \"Do we have part X?\" instantly.",
     icon: Package,
+    kicker: "Supply Chain",
     capabilities: [
       "Automated BOM import and tracking",
       "Photo-based delivery logging",
@@ -45,36 +49,43 @@ const features = [
 
 export default function FeatureCards() {
   return (
-    <section id="product" className="bg-[var(--vb-neutral-50)] py-20 sm:py-28">
+    <section id="features" className="bg-white/90 dark:bg-black/30 backdrop-blur supports-[backdrop-filter]:backdrop-blur py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[var(--vb-neutral-900)] sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-[var(--vb-gray-800)] dark:text-white sm:text-4xl">
             Everything your team needs to build faster
           </h2>
-          <p className="mt-4 text-lg leading-8 text-[var(--vb-neutral-600)]">
+          <p className="mt-4 text-lg leading-8 text-[var(--vb-gray-600)] dark:text-slate-300">
             Centralize information, automate workflows, and empower every role on your project.
           </p>
         </div>
-        <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 lg:max-w-none lg:grid-cols-2">
+        <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2 lg:max-w-none lg:grid-cols-2">
           {features.map((feature) => (
             <div
               key={feature.name}
-              className="relative flex flex-col gap-6 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 hover:shadow-md transition-shadow"
+              className="rounded-2xl bg-white dark:bg-white/5 p-6 border border-slate-200/60 dark:border-white/10
+                         shadow-[var(--vb-shadow-sm)] hover:shadow-[var(--vb-shadow-md)]
+                         transition-all duration-150 will-change-transform hover:-translate-y-0.5"
             >
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--vb-primary)]">
-                  <feature.icon className="h-6 w-6 text-white" aria-hidden="true" />
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--vb-accent)]/10 dark:bg-[var(--vb-accent)]/20 ring-1 ring-[var(--vb-accent)]/20">
+                  <feature.icon className="h-6 w-6 text-[var(--vb-accent)]" aria-hidden="true" />
                 </div>
-                <h3 className="text-xl font-semibold text-[var(--vb-neutral-900)]">
-                  {feature.name}
-                </h3>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-[var(--vb-accent)] uppercase tracking-wide">
+                    {feature.kicker}
+                  </div>
+                  <h3 className="text-lg font-semibold text-[var(--vb-gray-800)] dark:text-white mt-0.5">
+                    {feature.name}
+                  </h3>
+                </div>
               </div>
-              <p className="text-base leading-7 text-[var(--vb-neutral-600)]">
+              <p className="text-base leading-7 text-[var(--vb-gray-600)] dark:text-slate-300 mb-4">
                 {feature.description}
               </p>
               <ul className="space-y-2">
                 {feature.capabilities.map((capability) => (
-                  <li key={capability} className="flex gap-3 text-sm text-[var(--vb-neutral-600)]">
+                  <li key={capability} className="flex gap-3 text-sm text-[var(--vb-gray-600)] dark:text-slate-400">
                     <svg
                       className="h-5 w-5 flex-none text-[var(--vb-accent)]"
                       viewBox="0 0 20 20"

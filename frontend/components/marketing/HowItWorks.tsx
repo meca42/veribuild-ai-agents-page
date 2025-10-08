@@ -20,13 +20,13 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section className="bg-white py-20 sm:py-28">
+    <section className="bg-[var(--vb-gray-100)] dark:bg-[var(--vb-gray-100)] py-20 sm:py-28">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-[var(--vb-neutral-900)] sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-[var(--vb-gray-800)] dark:text-white sm:text-4xl">
             How It Works
           </h2>
-          <p className="mt-4 text-lg leading-8 text-[var(--vb-neutral-600)]">
+          <p className="mt-4 text-lg leading-8 text-[var(--vb-gray-600)] dark:text-slate-300">
             Get up and running in three simple steps
           </p>
         </div>
@@ -34,20 +34,20 @@ export default function HowItWorks() {
           <div className="grid grid-cols-1 gap-12 sm:grid-cols-3">
             {steps.map((step, index) => (
               <div key={step.name} className="relative flex flex-col items-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--vb-accent)] text-white text-2xl font-bold mb-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--vb-accent)] text-white text-2xl font-bold mb-4 shadow-[var(--vb-shadow-md)] ring-1 ring-black/5">
                   {index + 1}
                 </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--vb-primary)] mb-4">
-                  <step.icon className="h-6 w-6 text-white" aria-hidden="true" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--vb-accent)]/10 dark:bg-[var(--vb-accent)]/20 ring-1 ring-[var(--vb-accent)]/20 mb-4">
+                  <step.icon className="h-6 w-6 text-[var(--vb-accent)]" aria-hidden="true" />
                 </div>
-                <h3 className="text-xl font-semibold text-[var(--vb-neutral-900)] mb-2">
+                <h3 className="text-xl font-semibold text-[var(--vb-gray-800)] dark:text-white mb-2">
                   {step.name}
                 </h3>
-                <p className="text-base text-[var(--vb-neutral-600)]">
+                <p className="text-base text-[var(--vb-gray-600)] dark:text-slate-300">
                   {step.description}
                 </p>
                 {index < steps.length - 1 && (
-                  <div className="hidden sm:block absolute top-8 left-[calc(50%+4rem)] w-[calc(100%-8rem)] h-0.5 bg-gray-200" aria-hidden="true" />
+                  <div className="hidden sm:block absolute top-8 left-[calc(50%+4rem)] w-[calc(100%-8rem)] h-0.5 bg-[var(--vb-gray-300)] dark:bg-white/10" aria-hidden="true" />
                 )}
               </div>
             ))}
