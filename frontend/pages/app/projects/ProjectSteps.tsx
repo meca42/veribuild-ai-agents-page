@@ -12,21 +12,21 @@ import {
 } from "@/components/ui/sheet";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
-import { useProject, useSteps } from "@/lib/mocks/projects";
-import { Step } from "@/lib/types";
+import { useSteps } from "@/lib/hooks/useSteps";
+import type * as API from "@/lib/api/types";
 
-const statusColors = {
-  pending: "bg-gray-100 text-gray-800",
-  "in-progress": "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
+const statusColors: Record<string, string> = {
+  todo: "bg-gray-100 text-gray-800",
+  in_progress: "bg-blue-100 text-blue-800",
+  review: "bg-yellow-100 text-yellow-800",
+  done: "bg-green-100 text-green-800",
   blocked: "bg-red-100 text-red-800",
 };
 
 export default function ProjectSteps() {
   const { id } = useParams<{ id: string }>();
-  const { data: project } = useProject(id!);
-  const { data: steps, isLoading } = useSteps(id!);
-  const [selectedStep, setSelectedStep] = useState<Step | null>(null);
+  const { data: steps, isLoading } = useSteps(id);
+  const [selectedStep, setSelectedStep] = useState<API.Step | null>(null);
 
   if (isLoading) {
     return (
@@ -36,22 +36,14 @@ export default function ProjectSteps() {
     );
   }
 
-  if (!project) {
-    return (
-      <div className="p-6">
-        <div className="text-center text-red-600">Project not found</div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
         title="Steps"
-        description={`Manage execution steps for ${project.name}`}
+        description="Manage execution steps"
         breadcrumbs={[
           { label: "Projects", href: "/projects" },
-          { label: project.name, href: `/projects/${id}` },
+          { label: "Project", href: `/projects/${id}` },
           { label: "Steps" },
         ]}
         actions={
@@ -87,7 +79,7 @@ export default function ProjectSteps() {
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
                 {steps.map((step) => {
-                  const completedItems = step.checklist.filter((c) => c.completed).length;
+                  const completedItems = step.checklist.filter((c) => c.checked).length;
                   const totalItems = step.checklist.length;
                   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
@@ -174,31 +166,18 @@ export default function ProjectSteps() {
                   </div>
                 </div>
 
-                {selectedStep.references.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-neutral-900 mb-2">References</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedStep.references.map((ref) => (
-                        <Badge key={ref} variant="outline">
-                          {ref}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div>
+<div>
                   <h4 className="text-sm font-medium text-neutral-900 mb-3">Checklist</h4>
                   <div className="space-y-3">
                     {selectedStep.checklist.map((item) => (
                       <div key={item.id} className="flex items-center gap-3">
-                        <Checkbox checked={item.completed} />
+                        <Checkbox checked={item.checked} />
                         <label
                           className={`text-sm ${
-                            item.completed ? "line-through text-neutral-400" : "text-neutral-900"
+                            item.checked ? "line-through text-neutral-400" : "text-neutral-900"
                           }`}
                         >
-                          {item.label}
+                          {item.text}
                         </label>
                       </div>
                     ))}

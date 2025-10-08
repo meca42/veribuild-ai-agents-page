@@ -5,18 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
-import { useProject, usePhases } from "@/lib/mocks/projects";
+import { useProjects } from "@/lib/hooks/useProjects";
+import { usePhases } from "@/lib/hooks/usePhases";
 
-const statusColors = {
-  pending: "bg-gray-100 text-gray-800",
-  "in-progress": "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
+const statusColors: Record<string, string> = {
+  not_started: "bg-gray-100 text-gray-800",
+  in_progress: "bg-blue-100 text-blue-800",
+  blocked: "bg-red-100 text-red-800",
+  done: "bg-green-100 text-green-800",
 };
 
 export default function ProjectPhases() {
   const { id } = useParams<{ id: string }>();
-  const { data: project } = useProject(id!);
-  const { data: phases, isLoading } = usePhases(id!);
+  const { data: phases, isLoading } = usePhases(id);
 
   if (isLoading) {
     return (
@@ -26,22 +27,14 @@ export default function ProjectPhases() {
     );
   }
 
-  if (!project) {
-    return (
-      <div className="p-6">
-        <div className="text-center text-red-600">Project not found</div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <PageHeader
         title="Phases"
-        description={`Manage phases for ${project.name}`}
+        description="Manage project phases"
         breadcrumbs={[
           { label: "Projects", href: "/projects" },
-          { label: project.name, href: `/projects/${id}` },
+          { label: "Project", href: `/projects/${id}` },
           { label: "Phases" },
         ]}
         actions={

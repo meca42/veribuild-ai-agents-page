@@ -194,10 +194,10 @@ export const listSteps = async (projectId: string, params: FilterParams = {}): P
     .from('steps')
     .select(`
       *,
-      phase:phases!inner(project_id),
+      phase:phases(id, name, sequence),
       checkitems:step_checkitems(*)
     `, { count: 'exact' })
-    .eq('phase.project_id', projectId);
+    .eq('project_id', projectId);
 
   if (params.phaseId) {
     query = query.eq('phase_id', params.phaseId);
@@ -525,7 +525,7 @@ const mapStep = (data: any): API.Step => {
 
   return {
     id: data.id,
-    projectId: data.phase?.project_id || '',
+    projectId: data.project_id || '',
     phaseId: data.phase_id,
     name: data.title,
     description: data.description,
