@@ -23,6 +23,7 @@ import Issues from "./pages/app/issues/Issues";
 import Inspections from "./pages/app/inspections/Inspections";
 import Agents from "./pages/app/agents/Agents";
 import Runs from "./pages/app/runs/Runs";
+import RunDetail from "./pages/app/runs/RunDetail";
 import Settings from "./pages/app/settings/Settings";
 import Sandbox from "./pages/app/sandbox/Sandbox";
 import MockControls from "./pages/app/sandbox/MockControls";
@@ -78,6 +79,7 @@ export default function App() {
               <Route path="/inspections" element={<Inspections />} />
               <Route path="/agents" element={<Agents />} />
               <Route path="/runs" element={<Runs />} />
+              <Route path="/runs/:id" element={<RunDetail />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/sandbox/ui" element={<Sandbox />} />
               <Route path="/sandbox/mock" element={<MockControls />} />

@@ -56,7 +56,11 @@ export function RecentRuns({ projectId }: RecentRunsProps) {
         {error && <div className="text-sm text-red-600">{error}</div>}
         <div className="space-y-3">
           {runs.map((r) => (
-            <div key={r.id} className="flex items-start justify-between gap-3 border rounded-md p-3 hover:bg-accent/5 transition-colors">
+            <a 
+              key={r.id} 
+              href={`/runs/${r.id}`}
+              className="flex items-start justify-between gap-3 border rounded-md p-3 hover:bg-accent/5 transition-colors block"
+            >
               <div className="min-w-0 flex-1">
                 <div className="text-xs text-muted-foreground mb-1">
                   {r.started_at ? new Date(r.started_at).toLocaleString() : 'Not started'}
@@ -68,7 +72,7 @@ export function RecentRuns({ projectId }: RecentRunsProps) {
               <Badge variant={r.status === 'succeeded' ? 'success' : r.status === 'failed' ? 'danger' : 'neutral'} className="shrink-0 capitalize">
                 {r.status}
               </Badge>
-            </div>
+            </a>
           ))}
           {!loading && runs.length === 0 && (
             <div className="text-sm text-muted-foreground">No runs yet.</div>

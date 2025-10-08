@@ -85,11 +85,43 @@ export default function Runs() {
     fetchRuns();
   }, [status, agentId, projectId, q, fromDate, toDate]);
 
+  const handleExportCSV = async () => {
+    try {
+      const response = await backend.agents.exportRuns({
+        status: status || undefined,
+        agentId: agentId || undefined,
+        projectId: projectId || undefined,
+        q: q || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      });
+
+      const blob = new Blob([response.csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agent-runs-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+    }
+  };
+
   return (
     <div className="space-y-4 p-6">
       <div className="border rounded-lg bg-background">
-        <div className="px-6 py-4 border-b">
+        <div className="px-6 py-4 border-b flex items-center justify-between">
           <h2 className="text-xl font-semibold">Agent Runs</h2>
+          <Button
+            variant="secondary"
+            onClick={handleExportCSV}
+            disabled={loading}
+          >
+            Export CSV
+          </Button>
         </div>
         <div className="p-6">
           <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
@@ -169,12 +201,12 @@ export default function Runs() {
                   {r.status}
                 </Badge>
               </div>
-              <div className="md:col-span-1 flex items-center justify-end">
+              <div className="md:col-span-1 flex items-center justify-end gap-2">
                 <a 
                   className="text-primary hover:underline text-sm" 
-                  href={`/projects/${r.project_id}?run=${r.id}`}
+                  href={`/runs/${r.id}`}
                 >
-                  Open
+                  Details
                 </a>
               </div>
             </div>
