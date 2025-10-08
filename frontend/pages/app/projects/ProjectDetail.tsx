@@ -1,8 +1,11 @@
+import React from "react";
 import { useParams, Link } from "react-router-dom";
-import { Calendar, MapPin, User, FileText, Package, MessageSquare } from "lucide-react";
+import { Calendar, MapPin, User, FileText, Package, MessageSquare, Bot } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import PageHeader from "@/components/app/PageHeader";
+import { AgentDrawer } from "@/components/app/AgentDrawer";
+import { RunDetailDrawer } from "@/components/app/RunDetailDrawer";
 import { useProject } from "@/lib/hooks";
 
 const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
@@ -16,6 +19,15 @@ const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: project, isLoading, isError, error } = useProject(id!);
+  const [isAgentDrawerOpen, setIsAgentDrawerOpen] = React.useState(false);
+  const [isRunDetailOpen, setIsRunDetailOpen] = React.useState(false);
+  const [currentRunId, setCurrentRunId] = React.useState<string | null>(null);
+
+  const handleRunCreated = (runId: string) => {
+    setCurrentRunId(runId);
+    setIsAgentDrawerOpen(false);
+    setIsRunDetailOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -46,6 +58,10 @@ export default function ProjectDetail() {
         ]}
         actions={
           <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setIsAgentDrawerOpen(true)}>
+              <Bot className="w-4 h-4 mr-2" />
+              Ask Agent
+            </Button>
             <Button variant="secondary">Edit Project</Button>
             <Button variant="primary">Settings</Button>
           </div>
@@ -185,6 +201,20 @@ export default function ProjectDetail() {
           </Link>
         </div>
       </div>
+
+      <AgentDrawer
+        isOpen={isAgentDrawerOpen}
+        onClose={() => setIsAgentDrawerOpen(false)}
+        projectId={id!}
+        agentId="default-agent-id"
+        onRunCreated={handleRunCreated}
+      />
+
+      <RunDetailDrawer
+        isOpen={isRunDetailOpen}
+        onClose={() => setIsRunDetailOpen(false)}
+        runId={currentRunId}
+      />
     </div>
   );
 }
