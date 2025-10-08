@@ -12,7 +12,7 @@ export default function PdfViewerInternal({ fileUrl }: { fileUrl: string }) {
 
   return (
     <div style={{ width: '100%', height: '100%', minHeight: 480 }}>
-      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
+      <Worker workerUrl="/pdf.worker.min.js">
         <Viewer key={fileUrl} fileUrl={fileUrl} plugins={[plugin]} />
       </Worker>
     </div>
