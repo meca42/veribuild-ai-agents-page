@@ -1,405 +1,202 @@
-import { useState, useEffect } from 'react';
-import { Activity, ChevronDown, ChevronRight, X, Download } from 'lucide-react';
-import PageHeader from '@/components/app/PageHeader';
+import { useEffect, useState, useMemo } from 'react';
+import backend from '~backend/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Table, type TableColumn } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
-import { useToast } from '@/components/ui/Toast';
-import { useAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
-import type * as API from '@/lib/api/types';
 
-const statusColors: Record<API.AgentRunStatus, string> = {
-  queued: 'bg-neutral-100 text-neutral-600',
-  running: 'bg-blue-100 text-blue-800',
-  succeeded: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-neutral-100 text-neutral-600',
-};
+interface AgentRunRow {
+  id: string;
+  project_id: string;
+  agent_id: string;
+  status: string;
+  input: string;
+  result_summary: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  projects: {
+    org_id: string;
+    name: string;
+  }[];
+  agents: {
+    name: string;
+    model: string;
+  }[];
+}
+
+const STATUSES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const;
 
 export default function Runs() {
-  const { currentOrgId } = useAuth();
-  const { addToast } = useToast();
-  
-  const [runs, setRuns] = useState<API.AgentRun[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedRun, setSelectedRun] = useState<API.AgentRun | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
-  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<number>>(new Set());
+  const [items, setItems] = useState<AgentRunRow[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const projectId = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') || undefined : undefined;
+  const [agentId, setAgentId] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const urlParams = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      projectId: params.get('projectId') || '',
+    };
+  }, []);
 
   useEffect(() => {
-    if (!currentOrgId) return;
-    loadRuns();
-  }, [currentOrgId, projectId, statusFilter]);
+    if (urlParams.projectId) {
+      setProjectId(urlParams.projectId);
+    }
+  }, [urlParams.projectId]);
 
-  const loadRuns = async () => {
-    if (!currentOrgId) return;
-    
+  const fetchRuns = async (isLoadMore = false) => {
     try {
-      setIsLoading(true);
-      const response = await api.listAgentRuns({
-        orgId: currentOrgId,
-        projectId,
-        status: statusFilter !== 'all' ? statusFilter as API.AgentRunStatus : undefined,
+      setLoading(true);
+      const response = await backend.agents.listRuns({
+        status: status || undefined,
+        agentId: agentId || undefined,
+        projectId: projectId || undefined,
+        q: q || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        limit: 20,
+        cursor: isLoadMore ? nextCursor : undefined,
       });
-      setRuns(response.data);
-    } catch (err: any) {
-      console.error('Failed to load runs:', err);
-      addToast(err.message || 'Failed to load runs', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const openDetailModal = async (run: API.AgentRun) => {
-    try {
-      const fullRun = await api.getAgentRun(run.id);
-      setSelectedRun(fullRun);
-      setIsDetailModalOpen(true);
-    } catch (err: any) {
-      console.error('Failed to load run details:', err);
-      addToast(err.message || 'Failed to load run details', 'error');
-    }
-  };
-
-  const handleCancelRun = async (runId: string) => {
-    try {
-      const updated = await api.cancelAgentRun(runId);
-      setRuns(prev => prev.map(r => r.id === runId ? updated : r));
-      if (selectedRun?.id === runId) {
-        setSelectedRun(updated);
+      if (isLoadMore) {
+        setItems(prev => [...prev, ...response.items]);
+      } else {
+        setItems(response.items);
       }
-      addToast('Run cancelled', 'success');
-    } catch (err: any) {
-      console.error('Failed to cancel run:', err);
-      addToast(err.message || 'Failed to cancel run', 'error');
+      setNextCursor(response.next_cursor);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch runs:', err);
+      setError('Failed to load runs');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const toggleMessage = (seq: number) => {
-    const newExpanded = new Set(expandedMessages);
-    if (newExpanded.has(seq)) {
-      newExpanded.delete(seq);
-    } else {
-      newExpanded.add(seq);
-    }
-    setExpandedMessages(newExpanded);
-  };
-
-  const toggleToolCall = (seq: number) => {
-    const newExpanded = new Set(expandedToolCalls);
-    if (newExpanded.has(seq)) {
-      newExpanded.delete(seq);
-    } else {
-      newExpanded.add(seq);
-    }
-    setExpandedToolCalls(newExpanded);
-  };
-
-  const filteredRuns = runs.filter((run) =>
-    run.agentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    run.input?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const columns: TableColumn<API.AgentRun>[] = [
-    {
-      key: 'agent',
-      header: 'Agent',
-      accessor: (run) => (
-        <div>
-          <div className="font-medium text-neutral-900">{run.agentName || 'Unknown'}</div>
-          <div className="text-sm text-neutral-500 truncate max-w-xs">
-            {run.input || 'No input'}
-          </div>
-        </div>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      accessor: (run) => (
-        <Badge className={statusColors[run.status]}>
-          {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
-        </Badge>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'started',
-      header: 'Started',
-      accessor: (run) => (
-        <span className="text-sm text-neutral-600">
-          {run.startedAt ? new Date(run.startedAt).toLocaleString() : 'Not started'}
-        </span>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'duration',
-      header: 'Duration',
-      accessor: (run) => (
-        <span className="text-sm text-neutral-600">
-          {run.latencyMs ? `${(run.latencyMs / 1000).toFixed(2)}s` : '-'}
-        </span>
-      ),
-      sortable: true,
-    },
-    {
-      key: 'trigger',
-      header: 'Trigger',
-      accessor: (run) => <Badge variant="neutral">{run.trigger}</Badge>,
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      accessor: (run) => (
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => openDetailModal(run)}>
-            <Activity size={16} />
-            View
-          </Button>
-          {run.status === 'running' && (
-            <Button variant="ghost" size="sm" onClick={() => handleCancelRun(run.id)}>
-              <X size={16} />
-              Cancel
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="text-center text-neutral-600">Loading...</div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchRuns();
+  }, [status, agentId, projectId, q, fromDate, toDate]);
 
   return (
-    <div>
-      <PageHeader
-        title="Agent Runs"
-        description="Execution history and traces"
-        actions={null}
-      />
-
-      <div className="p-6">
-        <div className="mb-6 flex gap-4">
-          <Input
-            type="search"
-            placeholder="Search runs..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1"
-          />
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">All Status</option>
-            <option value="queued">Queued</option>
-            <option value="running">Running</option>
-            <option value="succeeded">Succeeded</option>
-            <option value="failed">Failed</option>
-            <option value="cancelled">Cancelled</option>
-          </Select>
+    <div className="space-y-4 p-6">
+      <div className="border rounded-lg bg-background">
+        <div className="px-6 py-4 border-b">
+          <h2 className="text-xl font-semibold">Agent Runs</h2>
         </div>
-
-        <Table
-          columns={columns}
-          data={filteredRuns}
-          getRowId={(run) => run.id}
-          pagination
-          pageSize={20}
-        />
-      </div>
-
-      {/* Run Detail Modal */}
-      {selectedRun && (
-        <Modal
-          isOpen={isDetailModalOpen}
-          onClose={() => {
-            setIsDetailModalOpen(false);
-            setSelectedRun(null);
-            setExpandedMessages(new Set());
-            setExpandedToolCalls(new Set());
-          }}
-          title={`Run: ${selectedRun.id.slice(0, 8)}`}
-        >
-          <div className="space-y-6">
-            {/* Run Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-1">Agent</h4>
-                <p className="text-sm text-neutral-900">{selectedRun.agentName}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-1">Status</h4>
-                <Badge className={statusColors[selectedRun.status]}>
-                  {selectedRun.status.charAt(0).toUpperCase() + selectedRun.status.slice(1)}
-                </Badge>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-1">Started By</h4>
-                <p className="text-sm text-neutral-900">{selectedRun.startedBy || 'Unknown'}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-1">Duration</h4>
-                <p className="text-sm text-neutral-900">
-                  {selectedRun.latencyMs ? `${(selectedRun.latencyMs / 1000).toFixed(2)}s` : '-'}
-                </p>
-              </div>
-            </div>
-
-            {/* Input */}
-            <div>
-              <h4 className="text-sm font-medium text-neutral-700 mb-2">Input</h4>
-              <div className="p-3 bg-neutral-50 rounded-lg">
-                <p className="text-sm text-neutral-900 whitespace-pre-wrap">{selectedRun.input}</p>
-              </div>
-            </div>
-
-            {/* Error */}
-            {selectedRun.error && (
-              <div>
-                <h4 className="text-sm font-medium text-red-700 mb-2">Error</h4>
-                <div className="p-3 bg-red-50 rounded-lg">
-                  <p className="text-sm text-red-900 whitespace-pre-wrap">{selectedRun.error}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Result Summary */}
-            {selectedRun.resultSummary && (
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-2">Result</h4>
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <p className="text-sm text-neutral-900 whitespace-pre-wrap">{selectedRun.resultSummary}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Messages Trace */}
-            {selectedRun.messages && selectedRun.messages.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-2">Message Trace</h4>
-                <div className="space-y-2">
-                  {selectedRun.messages.map((msg) => (
-                    <div key={msg.id} className="border border-neutral-200 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => toggleMessage(msg.seq)}
-                        className="w-full flex items-center justify-between p-3 bg-neutral-50 hover:bg-neutral-100 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {expandedMessages.has(msg.seq) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                          <Badge variant={msg.role === 'user' ? 'info' : msg.role === 'assistant' ? 'neutral' : 'neutral'}>
-                            {msg.role}
-                          </Badge>
-                          <span className="text-sm text-neutral-600">#{msg.seq}</span>
-                        </div>
-                      </button>
-                      {expandedMessages.has(msg.seq) && (
-                        <div className="p-3 border-t border-neutral-200">
-                          <p className="text-sm text-neutral-900 whitespace-pre-wrap">{msg.content}</p>
-                          {msg.toolName && (
-                            <p className="text-xs text-neutral-500 mt-2">Tool: {msg.toolName}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tool Calls */}
-            {selectedRun.toolCalls && selectedRun.toolCalls.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-neutral-700 mb-2">Tool Calls</h4>
-                <div className="space-y-2">
-                  {selectedRun.toolCalls.map((call) => (
-                    <div key={call.id} className="border border-neutral-200 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => toggleToolCall(call.seq)}
-                        className="w-full flex items-center justify-between p-3 bg-neutral-50 hover:bg-neutral-100 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {expandedToolCalls.has(call.seq) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                          <span className="font-medium text-neutral-900">{call.toolName}</span>
-                          <Badge className={call.status === 'ok' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                            {call.status}
-                          </Badge>
-                          <span className="text-sm text-neutral-600">#{call.seq}</span>
-                        </div>
-                      </button>
-                      {expandedToolCalls.has(call.seq) && (
-                        <div className="p-3 border-t border-neutral-200 space-y-3">
-                          <div>
-                            <h5 className="text-xs font-medium text-neutral-700 mb-1">Input</h5>
-                            <pre className="text-xs bg-neutral-100 p-2 rounded overflow-x-auto">
-                              {JSON.stringify(call.input, null, 2)}
-                            </pre>
-                          </div>
-                          {call.output && (
-                            <div>
-                              <h5 className="text-xs font-medium text-neutral-700 mb-1">Output</h5>
-                              <pre className="text-xs bg-neutral-100 p-2 rounded overflow-x-auto">
-                                {JSON.stringify(call.output, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                          {call.error && (
-                            <div>
-                              <h5 className="text-xs font-medium text-red-700 mb-1">Error</h5>
-                              <p className="text-xs text-red-900">{call.error}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-              {selectedRun.status === 'running' && (
-                <Button variant="secondary" onClick={() => handleCancelRun(selectedRun.id)}>
-                  <X size={16} />
-                  Cancel Run
-                </Button>
-              )}
-              {selectedRun.resultBlob && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(selectedRun.resultBlob, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `run-${selectedRun.id}.json`;
-                    a.click();
-                  }}
-                >
-                  <Download size={16} />
-                  Download Result
-                </Button>
-              )}
-              <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)}>
-                Close
-              </Button>
+        <div className="p-6">
+          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            <Input
+              placeholder="Search input or result…"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+            />
+            <Input
+              placeholder="Project ID"
+              value={projectId}
+              onChange={e => setProjectId(e.target.value)}
+            />
+            <Input
+              placeholder="Agent ID"
+              value={agentId}
+              onChange={e => setAgentId(e.target.value)}
+            />
+            <Select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+            >
+              <option value="">Any Status</option>
+              {STATUSES.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </Select>
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                placeholder="From"
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+              />
+              <Input
+                type="date"
+                placeholder="To"
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+              />
             </div>
           </div>
-        </Modal>
+        </div>
+      </div>
+
+      {error && <div className="text-sm text-red-600 px-6">{error}</div>}
+
+      <div className="space-y-3">
+        {items.map((r: AgentRunRow) => (
+          <div key={r.id} className="border rounded-lg p-4 bg-background hover:bg-accent/5 transition-colors">
+            <div className="grid md:grid-cols-12 gap-4 items-center">
+              <div className="md:col-span-3">
+                <div className="text-xs text-muted-foreground mb-1">
+                  {r.started_at ? new Date(r.started_at).toLocaleString() : 'Not started'}
+                </div>
+                <div className="text-sm font-mono truncate">
+                  {r.id.slice(0, 8)}
+                </div>
+              </div>
+              <div className="md:col-span-6 min-w-0">
+                <div className="text-xs text-muted-foreground truncate mb-1">
+                  {r.projects?.[0]?.name || 'Unknown Project'} • {r.agents?.[0]?.name || 'Unknown Agent'}
+                </div>
+                <div className="truncate text-sm">
+                  {r.result_summary || r.input}
+                </div>
+              </div>
+              <div className="md:col-span-2 flex items-center">
+                <Badge 
+                  variant={
+                    r.status === 'succeeded' ? 'success' : 
+                    r.status === 'failed' ? 'danger' : 
+                    'neutral'
+                  } 
+                  className="capitalize"
+                >
+                  {r.status}
+                </Badge>
+              </div>
+              <div className="md:col-span-1 flex items-center justify-end">
+                <a 
+                  className="text-primary hover:underline text-sm" 
+                  href={`/projects/${r.project_id}?run=${r.id}`}
+                >
+                  Open
+                </a>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {items.length === 0 && !loading && (
+        <div className="text-center py-12 text-muted-foreground">
+          No runs found
+        </div>
+      )}
+
+      {nextCursor && (
+        <div className="flex justify-center pt-4">
+          <Button 
+            onClick={() => fetchRuns(true)} 
+            disabled={loading}
+          >
+            {loading ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
       )}
     </div>
   );

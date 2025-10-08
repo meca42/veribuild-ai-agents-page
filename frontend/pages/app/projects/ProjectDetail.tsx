@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import PageHeader from "@/components/app/PageHeader";
 import { AgentDrawer } from "@/components/app/AgentDrawer";
 import RunDetailDrawer from "@/components/app/RunDetailDrawer";
+import { RecentRuns } from "@/components/app/RecentRuns";
 import { useProject } from "@/lib/hooks";
 
 const statusColors: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
@@ -199,6 +200,10 @@ export default function ProjectDetail() {
               Track and resolve project issues
             </p>
           </Link>
+        </div>
+
+        <div className="mt-6">
+          <RecentRuns projectId={id!} />
         </div>
       </div>
 

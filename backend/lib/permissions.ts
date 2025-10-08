@@ -98,3 +98,18 @@ export async function verifyRunOwnership(userId: string, runId: string): Promise
     }
   }
 }
+
+export async function getUserOrgIds(userId: string): Promise<string[]> {
+  const supabase = createServiceClient();
+  
+  const { data, error } = await supabase
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', userId);
+
+  if (error) {
+    throw APIError.internal("Failed to fetch user organizations");
+  }
+
+  return (data ?? []).map(m => m.org_id);
+}
