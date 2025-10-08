@@ -14,7 +14,7 @@ export default function CTABand() {
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button 
               size="lg"
-              className="bg-[var(--vb-accent)] hover:bg-[var(--vb-accent)]/90 text-white text-base px-8"
+              className="bg-white hover:bg-white/90 text-[var(--vb-primary)] text-base px-8 font-semibold"
               asChild
             >
               <a href="#get-demo">Get a demo</a>
@@ -22,7 +22,7 @@ export default function CTABand() {
             <Button 
               size="lg"
               variant="outline"
-              className="text-base px-8 border-white text-white hover:bg-white hover:text-[var(--vb-primary)]"
+              className="text-base px-8 border-2 border-white text-white hover:bg-white/10"
               asChild
             >
               <a href="#contact-sales">Contact sales</a>
