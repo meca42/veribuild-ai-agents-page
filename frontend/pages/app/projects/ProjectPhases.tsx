@@ -1,12 +1,16 @@
 import { useParams } from "react-router-dom";
 import { useState } from "react";
-import { Plus, GripVertical } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Plus, GripVertical, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { FormRow } from "@/components/ui/FormRow";
+import { useToast } from "@/components/ui/Toast";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
-import { useProjects } from "@/lib/hooks/useProjects";
-import { usePhases } from "@/lib/hooks/usePhases";
+import { usePhases, useCreatePhase, useDeletePhase, useReorderPhases } from "@/lib/hooks/usePhases";
 
 const statusColors: Record<string, string> = {
   not_started: "bg-gray-100 text-gray-800",
@@ -17,12 +21,65 @@ const statusColors: Record<string, string> = {
 
 export default function ProjectPhases() {
   const { id } = useParams<{ id: string }>();
-  const { data: phases, isLoading } = usePhases(id);
+  const { data: phases, isLoading, refetch } = usePhases(id);
+  const { createPhase, isLoading: isCreating } = useCreatePhase();
+  const { deletePhase, isLoading: isDeleting } = useDeletePhase();
+  const { reorderPhases } = useReorderPhases();
+  const { addToast } = useToast();
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newPhaseName, setNewPhaseName] = useState("");
+  const [newPhaseDescription, setNewPhaseDescription] = useState("");
+
+  const handleCreatePhase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !newPhaseName.trim()) return;
+
+    try {
+      await createPhase(id, { name: newPhaseName, description: newPhaseDescription });
+      addToast("Phase created successfully", "success");
+      setShowCreateModal(false);
+      setNewPhaseName("");
+      setNewPhaseDescription("");
+      refetch();
+    } catch (error: any) {
+      addToast(error.message || "Failed to create phase", "error");
+    }
+  };
+
+  const handleDeletePhase = async (phaseId: string) => {
+    if (!id || !confirm("Are you sure you want to delete this phase?")) return;
+
+    try {
+      await deletePhase(id, phaseId);
+      addToast("Phase deleted successfully", "success");
+      refetch();
+    } catch (error: any) {
+      addToast(error.message || "Failed to delete phase", "error");
+    }
+  };
+
+  const movePhase = async (index: number, direction: 'up' | 'down') => {
+    if (!id || !phases) return;
+    
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= phases.length) return;
+
+    const newOrder = [...phases];
+    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]];
+    
+    try {
+      await reorderPhases(id, newOrder.map(p => p.id));
+      refetch();
+    } catch (error: any) {
+      addToast(error.message || "Failed to reorder phases", "error");
+    }
+  };
 
   if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center text-[var(--vb-neutral-600)]">Loading...</div>
+        <div className="text-center text-neutral-600">Loading...</div>
       </div>
     );
   }
@@ -38,7 +95,10 @@ export default function ProjectPhases() {
           { label: "Phases" },
         ]}
         actions={
-          <Button className="bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
+          <Button 
+            onClick={() => setShowCreateModal(true)}
+            className="bg-primary hover:bg-primary/90"
+          >
             <Plus size={20} className="mr-2" />
             Add Phase
           </Button>
@@ -49,26 +109,41 @@ export default function ProjectPhases() {
         {phases && phases.length > 0 ? (
           <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
             <div className="divide-y divide-neutral-200">
-              {phases.map((phase) => (
+              {phases.map((phase, index) => (
                 <div
                   key={phase.id}
-                  className="p-6 hover:bg-neutral-50 transition-colors cursor-pointer"
+                  className="p-6 hover:bg-neutral-50 transition-colors"
                 >
                   <div className="flex items-start gap-4">
-                    <button className="mt-1 text-neutral-400 hover:text-neutral-600 cursor-grab active:cursor-grabbing">
-                      <GripVertical size={20} />
-                    </button>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <button
+                        onClick={() => movePhase(index, 'up')}
+                        disabled={index === 0}
+                        className="text-neutral-400 hover:text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronUp size={18} />
+                      </button>
+                      <button
+                        onClick={() => movePhase(index, 'down')}
+                        disabled={index === phases.length - 1}
+                        className="text-neutral-400 hover:text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronDown size={18} />
+                      </button>
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-neutral-900">{phase.name}</h3>
                         <Badge className={statusColors[phase.status]}>
-                          {phase.status.replace("-", " ")}
+                          {phase.status.replace("_", " ")}
                         </Badge>
                       </div>
-                      <p className="text-sm text-neutral-600 mb-3">{phase.description}</p>
+                      {phase.description && (
+                        <p className="text-sm text-neutral-600 mb-3">{phase.description}</p>
+                      )}
                       <div className="flex items-center gap-6 text-sm text-neutral-500">
                         <div>
-                          <span className="font-medium">Order:</span> {phase.order}
+                          <span className="font-medium">Sequence:</span> {phase.order}
                         </div>
                         {phase.startDate && (
                           <div>
@@ -84,11 +159,14 @@ export default function ProjectPhases() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeletePhase(phase.id)}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -98,12 +176,48 @@ export default function ProjectPhases() {
           <EmptyState
             icon={Plus}
             title="No phases yet"
-            description="Get started by creating your first project phase to organize work into manageable sections."
+            description="Get started by creating your first phase"
+            onAction={() => setShowCreateModal(true)}
             actionLabel="Add Phase"
-            onAction={() => {}}
           />
         )}
       </div>
+
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Phase"
+      >
+        <form onSubmit={handleCreatePhase} className="space-y-4">
+          <FormRow label="Name" required>
+            <Input
+              value={newPhaseName}
+              onChange={(e) => setNewPhaseName(e.target.value)}
+              placeholder="Phase name"
+              required
+            />
+          </FormRow>
+          <FormRow label="Description">
+            <Textarea
+              value={newPhaseDescription}
+              onChange={(e) => setNewPhaseDescription(e.target.value)}
+              placeholder="Optional description"
+              rows={3}
+            />
+          </FormRow>
+          <div className="flex gap-3 justify-end">
+            <Button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create Phase"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

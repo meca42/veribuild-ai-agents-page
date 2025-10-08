@@ -89,6 +89,30 @@ export const useUpdatePhase = () => {
   return { updatePhase, isLoading, isError, error };
 };
 
+export const useDeletePhase = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const deletePhase = useCallback(async (projectId: string, phaseId: string) => {
+    setIsLoading(true);
+    setIsError(false);
+    setError(null);
+
+    try {
+      await api.deletePhase(projectId, phaseId);
+    } catch (err) {
+      setIsError(true);
+      setError(err as Error);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { deletePhase, isLoading, isError, error };
+};
+
 export const useReorderPhases = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);

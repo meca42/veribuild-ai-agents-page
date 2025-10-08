@@ -1,18 +1,17 @@
 import { useParams } from "react-router-dom";
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Plus, X, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { FormRow } from "@/components/ui/FormRow";
+import { useToast } from "@/components/ui/Toast";
 import PageHeader from "@/components/app/PageHeader";
 import EmptyState from "@/components/app/EmptyState";
-import { useSteps } from "@/lib/hooks/useSteps";
+import { useSteps, useCreateStep, useDeleteStep } from "@/lib/hooks/useSteps";
 import type * as API from "@/lib/api/types";
 
 const statusColors: Record<string, string> = {
@@ -25,13 +24,60 @@ const statusColors: Record<string, string> = {
 
 export default function ProjectSteps() {
   const { id } = useParams<{ id: string }>();
-  const { data: steps, isLoading } = useSteps(id);
+  const { data: steps, isLoading, refetch } = useSteps(id);
+  const { createStep, isLoading: isCreating } = useCreateStep();
+  const { deleteStep, isLoading: isDeleting } = useDeleteStep();
+  const { addToast } = useToast();
+
   const [selectedStep, setSelectedStep] = useState<API.Step | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newStepName, setNewStepName] = useState("");
+  const [newStepDescription, setNewStepDescription] = useState("");
+  const [checklistText, setChecklistText] = useState("");
+
+  const handleCreateStep = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !newStepName.trim()) return;
+
+    const checklistItems = checklistText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(text => ({ id: '', text, checked: false }));
+
+    try {
+      await createStep(id, '', {
+        name: newStepName,
+        description: newStepDescription,
+        checklist: checklistItems,
+      });
+      addToast("Step created successfully", "success");
+      setShowCreateModal(false);
+      setNewStepName("");
+      setNewStepDescription("");
+      setChecklistText("");
+      refetch();
+    } catch (error: any) {
+      addToast(error.message || "Failed to create step", "error");
+    }
+  };
+
+  const handleDeleteStep = async (stepId: string) => {
+    if (!id || !confirm("Are you sure you want to delete this step?")) return;
+
+    try {
+      await deleteStep(id, stepId);
+      addToast("Step deleted successfully", "success");
+      refetch();
+    } catch (error: any) {
+      addToast(error.message || "Failed to delete step", "error");
+    }
+  };
 
   if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center text-[var(--vb-neutral-600)]">Loading...</div>
+        <div className="text-center text-neutral-600">Loading...</div>
       </div>
     );
   }
@@ -47,7 +93,10 @@ export default function ProjectSteps() {
           { label: "Steps" },
         ]}
         actions={
-          <Button className="bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
+          <Button 
+            onClick={() => setShowCreateModal(true)}
+            className="bg-primary hover:bg-primary/90"
+          >
             <Plus size={20} className="mr-2" />
             Add Step
           </Button>
@@ -64,16 +113,13 @@ export default function ProjectSteps() {
                     Step
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Assignee
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Due Date
+                    Progress
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                    Progress
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -90,30 +136,31 @@ export default function ProjectSteps() {
                       className="hover:bg-neutral-50 transition-colors cursor-pointer"
                     >
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-[var(--vb-primary)]">
+                        <div className="text-sm font-medium text-primary">
                           {step.name}
                         </div>
                         <div className="text-sm text-neutral-500 mt-1">{step.description}</div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-neutral-900">{step.assignee || "-"}</td>
                       <td className="px-6 py-4">
                         <Badge className={statusColors[step.status]}>
-                          {step.status.replace("-", " ")}
+                          {step.status.replace("_", " ")}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-sm text-neutral-900">
-                        {step.dueDate ? new Date(step.dueDate).toLocaleDateString() : "-"}
+                        {totalItems > 0 ? `${completedItems}/${totalItems} (${progress}%)` : "-"}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-neutral-200 rounded-full h-2">
-                            <div
-                              className="bg-[var(--vb-accent)] h-2 rounded-full transition-all"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          <span className="text-sm text-neutral-600 w-12">{progress}%</span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteStep(step.id);
+                          }}
+                          disabled={isDeleting}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -125,78 +172,105 @@ export default function ProjectSteps() {
           <EmptyState
             icon={Plus}
             title="No steps yet"
-            description="Create execution steps with checklists to track detailed work items."
+            description="Get started by creating your first step"
+            onAction={() => setShowCreateModal(true)}
             actionLabel="Add Step"
-            onAction={() => {}}
           />
         )}
       </div>
 
-      <Sheet open={!!selectedStep} onOpenChange={() => setSelectedStep(null)}>
-        <SheetContent className="sm:max-w-xl overflow-y-auto">
-          {selectedStep && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{selectedStep.name}</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6 space-y-6">
-                <div>
-                  <h4 className="text-sm font-medium text-neutral-900 mb-2">Description</h4>
-                  <p className="text-sm text-neutral-600">{selectedStep.description}</p>
-                </div>
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Step"
+      >
+        <form onSubmit={handleCreateStep} className="space-y-4">
+          <FormRow label="Title" required>
+            <Input
+              value={newStepName}
+              onChange={(e) => setNewStepName(e.target.value)}
+              placeholder="Step title"
+              required
+            />
+          </FormRow>
+          <FormRow label="Description">
+            <Textarea
+              value={newStepDescription}
+              onChange={(e) => setNewStepDescription(e.target.value)}
+              placeholder="Optional description"
+              rows={2}
+            />
+          </FormRow>
+          <FormRow label="Checklist (one item per line)">
+            <Textarea
+              value={checklistText}
+              onChange={(e) => setChecklistText(e.target.value)}
+              placeholder="Item 1&#10;Item 2&#10;Item 3"
+              rows={4}
+            />
+          </FormRow>
+          <div className="flex gap-3 justify-end">
+            <Button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create Step"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-neutral-900 mb-2">Status</h4>
-                    <Badge className={statusColors[selectedStep.status]}>
-                      {selectedStep.status.replace("-", " ")}
-                    </Badge>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-neutral-900 mb-2">Assignee</h4>
-                    <p className="text-sm text-neutral-600">{selectedStep.assignee || "-"}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-neutral-900 mb-2">Due Date</h4>
-                    <p className="text-sm text-neutral-600">
-                      {selectedStep.dueDate
-                        ? new Date(selectedStep.dueDate).toLocaleDateString()
-                        : "-"}
-                    </p>
-                  </div>
-                </div>
+      {selectedStep && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedStep(null)}
+          title={selectedStep.name}
+        >
+          <div className="space-y-4">
+            {selectedStep.description && (
+              <p className="text-sm text-neutral-600">{selectedStep.description}</p>
+            )}
 
-<div>
-                  <h4 className="text-sm font-medium text-neutral-900 mb-3">Checklist</h4>
-                  <div className="space-y-3">
-                    {selectedStep.checklist.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3">
-                        <Checkbox checked={item.checked} />
-                        <label
-                          className={`text-sm ${
-                            item.checked ? "line-through text-neutral-400" : "text-neutral-900"
-                          }`}
-                        >
-                          {item.text}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div className="flex items-center gap-4">
+              <div>
+                <span className="text-sm font-medium text-neutral-700">Status:</span>
+                <Badge className={`ml-2 ${statusColors[selectedStep.status]}`}>
+                  {selectedStep.status.replace("_", " ")}
+                </Badge>
+              </div>
+            </div>
 
-                <div className="flex gap-3 pt-4">
-                  <Button className="flex-1 bg-[var(--vb-primary)] hover:bg-[var(--vb-primary)]/90">
-                    Edit Step
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    Mark Complete
-                  </Button>
+            {selectedStep.checklist.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-neutral-900 mb-3">Checklist</h4>
+                <div className="space-y-3">
+                  {selectedStep.checklist.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3">
+                      <Checkbox checked={item.checked} disabled />
+                      <label
+                        className={`text-sm ${
+                          item.checked ? "line-through text-neutral-400" : "text-neutral-900"
+                        }`}
+                      >
+                        {item.text}
+                      </label>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <Button onClick={() => setSelectedStep(null)} className="flex-1">
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

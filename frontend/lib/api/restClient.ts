@@ -1,4 +1,5 @@
 import { createBrowserClient } from '../supabase/client';
+import backend from '~backend/client';
 import { applySearch, applySort, applyDateRange, createPaginatedResponse, type FilterParams, type PaginatedResponse } from '../mocks/filters';
 import type * as API from './types';
 
@@ -112,123 +113,55 @@ export const archiveProject = async (id: string): Promise<void> => {
 };
 
 export const listPhases = async (projectId: string): Promise<API.Phase[]> => {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('phases')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('sequence', { ascending: true });
-
-  if (error) throw error;
-  return (data || []).map(mapPhase);
+  const response = await backend.phases.listPhases({ projectId });
+  return response.items.map(mapPhase);
 };
 
 export const createPhase = async (projectId: string, data: Partial<API.Phase>): Promise<API.Phase> => {
-  const supabase = getSupabase();
-  
-  const { count } = await supabase
-    .from('phases')
-    .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId);
-
-  const { data: phase, error } = await supabase
-    .from('phases')
-    .insert({
-      project_id: projectId,
-      name: data.name || 'Untitled Phase',
-      description: data.description,
-      status: data.status || 'not_started',
-      sequence: data.order !== undefined ? data.order : (count || 0),
-      progress: data.progress || 0,
-      planned_start: data.startDate,
-      planned_end: data.endDate,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapPhase(phase);
+  const response = await backend.phases.createPhase({
+    projectId,
+    name: data.name || 'Untitled Phase',
+    description: data.description,
+  });
+  return mapPhase(response.item);
 };
 
 export const updatePhase = async (id: string, data: Partial<API.Phase>): Promise<API.Phase> => {
-  const supabase = getSupabase();
-  const updateData: any = {};
-  
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.description !== undefined) updateData.description = data.description;
-  if (data.status !== undefined) updateData.status = data.status;
-  if (data.order !== undefined) updateData.sequence = data.order;
-  if (data.progress !== undefined) updateData.progress = data.progress;
-  if (data.startDate !== undefined) updateData.planned_start = data.startDate;
-  if (data.endDate !== undefined) updateData.planned_end = data.endDate;
-
-  const { data: phase, error } = await supabase
-    .from('phases')
-    .update(updateData)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapPhase(phase);
+  const projectId = data.projectId || '';
+  const response = await backend.phases.updatePhase({
+    projectId,
+    phaseId: id,
+    name: data.name,
+    description: data.description,
+    status: data.status,
+  });
+  return mapPhase(response.item);
 };
 
 export const reorderPhases = async (projectId: string, phaseIds: string[]): Promise<void> => {
-  const supabase = getSupabase();
-  
-  await Promise.all(
-    phaseIds.map((phaseId, index) =>
-      supabase
-        .from('phases')
-        .update({ sequence: index })
-        .eq('id', phaseId)
-        .eq('project_id', projectId)
-    )
-  );
+  const order = phaseIds.map((id, index) => ({ id, sequence: index }));
+  await backend.phases.reorderPhases({ projectId, order });
+};
+
+export const deletePhase = async (projectId: string, phaseId: string): Promise<void> => {
+  await backend.phases.deletePhase({ projectId, phaseId });
 };
 
 export const listSteps = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Step>> => {
-  const supabase = getSupabase();
-  
-  let query = supabase
-    .from('steps')
-    .select(`
-      *,
-      phase:phases(id, name, sequence),
-      checkitems:step_checkitems(*)
-    `, { count: 'exact' })
-    .eq('project_id', projectId);
+  const response = await backend.steps.listSteps({
+    projectId,
+    phaseId: params.phaseId,
+    status: params.status,
+    q: params.q,
+  });
 
-  if (params.phaseId) {
-    query = query.eq('phase_id', params.phaseId);
-  }
-
-  if (params.q) {
-    query = query.or(`title.ilike.%${params.q}%,description.ilike.%${params.q}%`);
-  }
-
-  if (params.status) {
-    query = query.eq('status', params.status);
-  }
-
-  if (params.sortBy) {
-    query = query.order(params.sortBy, { ascending: params.sortDir !== 'desc' });
-  } else {
-    query = query.order('order_index', { ascending: true });
-  }
-
-  const limit = params.limit || 20;
-  const offset = ((params.page || 1) - 1) * limit;
-  query = query.range(offset, offset + limit - 1);
-
-  const { data, error, count } = await query;
-  if (error) throw error;
+  const data = response.items.map(mapStep);
 
   return {
-    data: (data || []).map(mapStep),
-    total: count || 0,
+    data,
+    total: data.length,
     page: params.page || 1,
-    pageSize: limit,
+    pageSize: params.limit || 20,
   };
 };
 
@@ -248,144 +181,73 @@ export const getStep = async (id: string): Promise<API.Step> => {
 };
 
 export const createStep = async (projectId: string, phaseId: string, data: Partial<API.Step>): Promise<API.Step> => {
-  const supabase = getSupabase();
+  const checklistLabels = (data.checklist || []).map(item => item.text);
   
-  const { count } = await supabase
-    .from('steps')
-    .select('*', { count: 'exact', head: true })
-    .eq('phase_id', phaseId);
+  const response = await backend.steps.createStep({
+    projectId,
+    phaseId: phaseId || undefined,
+    title: data.name || 'Untitled Step',
+    description: data.description,
+    status: data.status || 'todo',
+    checklist: checklistLabels.length > 0 ? checklistLabels : undefined,
+  });
 
-  const { data: step, error } = await supabase
-    .from('steps')
-    .insert({
-      phase_id: phaseId,
-      title: data.name || 'Untitled Step',
-      description: data.description,
-      status: data.status || 'todo',
-      assignee_id: data.assignee,
-      planned_end: data.dueDate,
-      order_index: count || 0,
-      meta: {
-        tags: data.tags || [],
-      },
-    })
-    .select(`
-      *,
-      checkitems:step_checkitems(*)
-    `)
-    .single();
-
-  if (error) throw error;
-  
-  if (data.checklist && data.checklist.length > 0) {
-    const checkitems = data.checklist.map((item, index) => ({
-      step_id: step.id,
-      label: item.text,
-      is_done: item.checked,
-      order_index: index,
-    }));
-    
-    await supabase.from('step_checkitems').insert(checkitems);
-    
-    const { data: updatedStep } = await supabase
+  if (checklistLabels.length > 0) {
+    const { data: fullStep } = await getSupabase()
       .from('steps')
       .select(`
         *,
         checkitems:step_checkitems(*)
       `)
-      .eq('id', step.id)
+      .eq('id', response.item.id)
       .single();
     
-    return mapStep(updatedStep);
+    return mapStep(fullStep);
   }
-  
-  return mapStep(step);
+
+  return mapStep(response.item);
 };
 
 export const updateStep = async (id: string, data: Partial<API.Step>): Promise<API.Step> => {
-  const supabase = getSupabase();
+  const projectId = data.projectId || '';
   
-  const updateData: any = {};
-  if (data.name !== undefined) updateData.title = data.name;
-  if (data.description !== undefined) updateData.description = data.description;
-  if (data.status !== undefined) updateData.status = data.status;
-  if (data.assignee !== undefined) updateData.assignee_id = data.assignee;
-  if (data.dueDate !== undefined) updateData.planned_end = data.dueDate;
-  if (data.tags !== undefined) {
-    updateData.meta = { tags: data.tags };
-  }
+  const response = await backend.steps.updateStep({
+    projectId,
+    stepId: id,
+    title: data.name,
+    description: data.description,
+    status: data.status,
+    phaseId: data.phaseId,
+    assigneeId: data.assignee,
+  });
 
-  const { data: step, error } = await supabase
+  const { data: fullStep } = await getSupabase()
     .from('steps')
-    .update(updateData)
-    .eq('id', id)
     .select(`
       *,
       checkitems:step_checkitems(*)
     `)
+    .eq('id', id)
     .single();
 
-  if (error) throw error;
-  
-  if (data.checklist !== undefined) {
-    await supabase.from('step_checkitems').delete().eq('step_id', id);
-    
-    if (data.checklist.length > 0) {
-      const checkitems = data.checklist.map((item, index) => ({
-        step_id: id,
-        label: item.text,
-        is_done: item.checked,
-        order_index: index,
-      }));
-      
-      await supabase.from('step_checkitems').insert(checkitems);
-    }
-    
-    const { data: updatedStep } = await supabase
-      .from('steps')
-      .select(`
-        *,
-        checkitems:step_checkitems(*)
-      `)
-      .eq('id', id)
-      .single();
-    
-    return mapStep(updatedStep);
-  }
-  
-  return mapStep(step);
+  return mapStep(fullStep);
+};
+
+export const deleteStep = async (projectId: string, stepId: string): Promise<void> => {
+  await backend.steps.deleteStep({ projectId, stepId });
 };
 
 export const toggleCheckItem = async (stepId: string, checkItemId: string): Promise<API.Step> => {
-  const supabase = getSupabase();
+  const step = await getStep(stepId);
+  const projectId = step.projectId;
   
-  const { data: checkitem } = await supabase
-    .from('step_checkitems')
-    .select('is_done')
-    .eq('id', checkItemId)
-    .single();
+  await backend.steps.toggleCheckitem({
+    projectId,
+    stepId,
+    checkitemId: checkItemId,
+  });
 
-  if (!checkitem) throw new Error('Check item not found');
-
-  await supabase
-    .from('step_checkitems')
-    .update({ 
-      is_done: !checkitem.is_done,
-      done_at: !checkitem.is_done ? new Date().toISOString() : null,
-    })
-    .eq('id', checkItemId);
-
-  const { data: step, error } = await supabase
-    .from('steps')
-    .select(`
-      *,
-      checkitems:step_checkitems(*)
-    `)
-    .eq('id', stepId)
-    .single();
-
-  if (error) throw error;
-  return mapStep(step);
+  return await getStep(stepId);
 };
 
 export const listFiles = async (orgId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.File>> => {

@@ -131,6 +131,30 @@ export const useUpdateStep = () => {
   return { updateStep, isLoading, isError, error };
 };
 
+export const useDeleteStep = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const deleteStep = useCallback(async (projectId: string, stepId: string) => {
+    setIsLoading(true);
+    setIsError(false);
+    setError(null);
+
+    try {
+      await api.deleteStep(projectId, stepId);
+    } catch (err) {
+      setIsError(true);
+      setError(err as Error);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { deleteStep, isLoading, isError, error };
+};
+
 export const useToggleCheckItem = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);

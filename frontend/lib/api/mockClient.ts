@@ -140,6 +140,16 @@ export const reorderPhases = async (projectId: string, phaseIds: string[]): Prom
   });
 };
 
+export const deletePhase = async (projectId: string, phaseId: string): Promise<void> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const phaseIndex = db.phases.findIndex((p) => p.id === phaseId && p.projectId === projectId);
+    if (phaseIndex !== -1) {
+      db.phases.splice(phaseIndex, 1);
+    }
+  });
+};
+
 export const listSteps = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Step>> => {
   return simulateLatency(() => {
     const db = getDatabase();
@@ -212,6 +222,16 @@ export const updateStep = async (id: string, data: Partial<API.Step>): Promise<A
       updatedAt: new Date(),
     };
     return db.steps[index];
+  });
+};
+
+export const deleteStep = async (projectId: string, stepId: string): Promise<void> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const stepIndex = db.steps.findIndex((s) => s.id === stepId && s.projectId === projectId);
+    if (stepIndex !== -1) {
+      db.steps.splice(stepIndex, 1);
+    }
   });
 };
 
