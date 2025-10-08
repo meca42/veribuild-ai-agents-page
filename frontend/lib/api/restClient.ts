@@ -858,234 +858,6 @@ export const addDocumentVersion = async (
   }
 };
 
-const mapRFI = (data: any): API.RFI => ({
-  id: data.id,
-  projectId: data.project_id,
-  number: data.number,
-  title: data.title,
-  question: data.question,
-  answer: data.answer,
-  status: data.status,
-  askedBy: data.asked_by_user?.name || data.asked_by,
-  assignedTo: data.assigned_to_user?.name || data.assigned_to,
-  dueDate: data.due_date ? new Date(data.due_date) : undefined,
-  createdAt: new Date(data.created_at),
-  updatedAt: new Date(data.updated_at),
-  attachments: (data.attachments || []).map((a: any) => ({
-    id: a.id,
-    rfiId: a.rfi_id,
-    fileId: a.file_id,
-    fileName: a.file?.path?.split('/').pop() || 'Unknown',
-    fileUrl: a.file?.path ? createBrowserClient()?.storage.from(a.file.bucket).getPublicUrl(a.file.path).data.publicUrl || '' : '',
-    createdAt: new Date(a.created_at),
-  })),
-});
-
-export const listRFIs = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.RFI>> => {
-  const supabase = getSupabase();
-  
-  let query = supabase
-    .from('rfis')
-    .select(`
-      *,
-      asked_by_user:users!rfis_asked_by_fkey(name),
-      assigned_to_user:users!rfis_assigned_to_fkey(name),
-      attachments:rfi_attachments(
-        id,
-        rfi_id,
-        file_id,
-        created_at,
-        file:files(id, path, bucket, mime_type, size_bytes)
-      )
-    `, { count: 'exact' })
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false });
-
-  if (params.q) {
-    query = query.or(`number.ilike.%${params.q}%,title.ilike.%${params.q}%,question.ilike.%${params.q}%`);
-  }
-
-  if (params.status) {
-    query = query.eq('status', params.status);
-  }
-
-  const limit = params.pageSize || 20;
-  const offset = ((params.page || 1) - 1) * limit;
-  query = query.range(offset, offset + limit - 1);
-
-  const { data, error, count } = await query;
-  if (error) throw error;
-
-  return {
-    data: (data || []).map(mapRFI),
-    total: count || 0,
-    page: params.page || 1,
-    pageSize: limit,
-  };
-};
-
-export const getRFI = async (id: string): Promise<API.RFI> => {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('rfis')
-    .select(`
-      *,
-      asked_by_user:users!rfis_asked_by_fkey(name),
-      assigned_to_user:users!rfis_assigned_to_fkey(name),
-      attachments:rfi_attachments(
-        id,
-        rfi_id,
-        file_id,
-        created_at,
-        file:files(id, path, bucket, mime_type, size_bytes)
-      )
-    `)
-    .eq('id', id)
-    .single();
-
-  if (error) throw error;
-  return mapRFI(data);
-};
-
-export const createRFI = async (projectId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
-  const supabase = getSupabase();
-  
-  const { count } = await supabase
-    .from('rfis')
-    .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId);
-
-  const rfiNumber = data.number || `RFI-${String((count || 0) + 1).padStart(3, '0')}`;
-
-  const { data: rfi, error } = await supabase
-    .from('rfis')
-    .insert({
-      project_id: projectId,
-      number: rfiNumber,
-      title: data.title || 'Untitled RFI',
-      question: data.question || '',
-      status: data.status || 'open',
-      asked_by: data.askedBy || (await supabase.auth.getUser()).data.user?.id,
-      assigned_to: data.assignedTo,
-      due_date: data.dueDate,
-    })
-    .select(`
-      *,
-      asked_by_user:users!rfis_asked_by_fkey(name),
-      assigned_to_user:users!rfis_assigned_to_fkey(name),
-      attachments:rfi_attachments(
-        id,
-        rfi_id,
-        file_id,
-        created_at,
-        file:files(id, path, bucket, mime_type, size_bytes)
-      )
-    `)
-    .single();
-
-  if (error) throw error;
-  return mapRFI(rfi);
-};
-
-export const updateRFI = async (id: string, data: Partial<API.RFI>): Promise<API.RFI> => {
-  const supabase = getSupabase();
-  
-  const updateData: any = {};
-  if (data.title !== undefined) updateData.title = data.title;
-  if (data.question !== undefined) updateData.question = data.question;
-  if (data.answer !== undefined) updateData.answer = data.answer;
-  if (data.status !== undefined) updateData.status = data.status;
-  if (data.assignedTo !== undefined) updateData.assigned_to = data.assignedTo;
-  if (data.dueDate !== undefined) updateData.due_date = data.dueDate;
-
-  const { data: rfi, error } = await supabase
-    .from('rfis')
-    .update(updateData)
-    .eq('id', id)
-    .select(`
-      *,
-      asked_by_user:users!rfis_asked_by_fkey(name),
-      assigned_to_user:users!rfis_assigned_to_fkey(name),
-      attachments:rfi_attachments(
-        id,
-        rfi_id,
-        file_id,
-        created_at,
-        file:files(id, path, bucket, mime_type, size_bytes)
-      )
-    `)
-    .single();
-
-  if (error) throw error;
-  return mapRFI(rfi);
-};
-
-export const addRFIAttachment = async (rfiId: string, file: File): Promise<API.RFI> => {
-  const supabase = getSupabase();
-  
-  const { data: rfi } = await supabase
-    .from('rfis')
-    .select('project_id')
-    .eq('id', rfiId)
-    .single();
-
-  if (!rfi) throw new Error('RFI not found');
-
-  const { data: project } = await supabase
-    .from('projects')
-    .select('org_id')
-    .eq('id', rfi.project_id)
-    .single();
-
-  if (!project) throw new Error('Project not found');
-
-  const bucket = 'documents';
-  // Sanitize filename: remove spaces and special characters
-  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const fileName = `${project.org_id}/${rfi.project_id}/rfi/${crypto.randomUUID()}_${sanitizedName}`;
-  
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false,
-    });
-
-  if (uploadError) throw uploadError;
-
-  try {
-    const { data: fileRecord, error: fileError } = await supabase
-      .from('files')
-      .insert({
-        org_id: project.org_id,
-        project_id: rfi.project_id,
-        bucket,
-        path: fileName,
-        mime_type: file.type,
-        size_bytes: file.size,
-        uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-      })
-      .select()
-      .single();
-
-    if (fileError) throw fileError;
-
-    const { error: attachmentError } = await supabase
-      .from('rfi_attachments')
-      .insert({
-        rfi_id: rfiId,
-        file_id: fileRecord.id,
-      });
-
-    if (attachmentError) throw attachmentError;
-
-    return await getRFI(rfiId);
-  } catch (error) {
-    await supabase.storage.from(bucket).remove([fileName]);
-    throw error;
-  }
-};
-
 const mapSubmittal = (data: any): API.Submittal => ({
   id: data.id,
   projectId: data.project_id,
@@ -2240,6 +2012,33 @@ const mapAgentRun = (data: any): API.AgentRun => ({
   toolCalls: (data.tool_calls || []).map(mapToolCall),
 });
 
+const mapRFI = (data: any): API.RFI => ({
+  id: data.id,
+  projectId: data.project_id,
+  subject: data.subject,
+  question: data.question,
+  status: data.status,
+  priority: data.priority,
+  dueDate: data.due_date,
+  drawingId: data.drawing_id,
+  assignedTo: data.assigned_to,
+  createdBy: data.created_by,
+  answeredBy: data.answered_by,
+  answer: data.answer,
+  createdAt: new Date(data.created_at),
+  updatedAt: new Date(data.updated_at),
+});
+
+const mapRFIAttachment = (data: any): API.RFIAttachment => ({
+  id: data.id,
+  rfiId: data.rfi_id,
+  fileId: data.file_id,
+  filename: data.filename,
+  contentType: data.content_type,
+  sizeBytes: data.size_bytes,
+  createdAt: new Date(data.created_at),
+});
+
 // Tools API
 export const listTools = async (orgId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.Tool>> => {
   const supabase = getSupabase();
@@ -2596,6 +2395,122 @@ export const cancelAgentRun = async (runId: string): Promise<API.AgentRun> => {
 
   if (error) throw error;
   return mapAgentRun(data);
+};
+
+export const listRFIs = async (projectId: string, params: FilterParams = {}): Promise<PaginatedResponse<API.RFI>> => {
+  const response = await backend.rfis.listRFIs({
+    projectId,
+    status: params.status,
+    assignedTo: params.assignedTo,
+    q: params.q,
+    dueFrom: params.dateFrom,
+    dueTo: params.dateTo,
+  });
+
+  const data = response.items.map(mapRFI);
+
+  return {
+    data,
+    total: data.length,
+    page: params.page || 1,
+    pageSize: params.limit || 20,
+  };
+};
+
+export const getRFI = async (projectId: string, rfiId: string): Promise<API.RFI> => {
+  const response = await backend.rfis.getRFI({ projectId, rfiId });
+  return mapRFI(response.item);
+};
+
+export const createRFI = async (projectId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
+  const response = await backend.rfis.createRFI({
+    projectId,
+    subject: data.subject || '',
+    question: data.question || '',
+    priority: data.priority,
+    dueDate: data.dueDate,
+    drawingId: data.drawingId,
+    assignedTo: data.assignedTo,
+  });
+  return mapRFI(response.item);
+};
+
+export const updateRFI = async (projectId: string, rfiId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
+  const response = await backend.rfis.updateRFI({
+    projectId,
+    rfiId,
+    subject: data.subject,
+    question: data.question,
+    priority: data.priority,
+    dueDate: data.dueDate,
+    drawingId: data.drawingId,
+    assignedTo: data.assignedTo,
+    status: data.status,
+  });
+  return mapRFI(response.item);
+};
+
+export const answerRFI = async (projectId: string, rfiId: string, answer: string): Promise<API.RFI> => {
+  const response = await backend.rfis.answerRFI({
+    projectId,
+    rfiId,
+    answer,
+    answeredBy: 'system',
+  });
+  return mapRFI(response.item);
+};
+
+export const closeRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  await backend.rfis.closeRFI({ projectId, rfiId });
+};
+
+export const reopenRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  await backend.rfis.reopenRFI({ projectId, rfiId });
+};
+
+export const deleteRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  await backend.rfis.deleteRFI({ projectId, rfiId });
+};
+
+export const listRFIAttachments = async (projectId: string, rfiId: string): Promise<API.RFIAttachment[]> => {
+  const response = await backend.rfis.listAttachments({ projectId, rfiId });
+  return response.items.map(mapRFIAttachment);
+};
+
+export const uploadRFIAttachment = async (projectId: string, rfiId: string, file: File): Promise<API.RFIAttachment> => {
+  const urlResponse = await backend.rfis.getUploadUrl({
+    projectId,
+    rfiId,
+    filename: file.name,
+  });
+
+  const uploadResponse = await fetch(urlResponse.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': file.type,
+    },
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file');
+  }
+
+  const response = await backend.rfis.createAttachment({
+    projectId,
+    rfiId,
+    bucket: urlResponse.bucket,
+    path: urlResponse.path,
+    filename: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+  });
+
+  return mapRFIAttachment(response.item);
+};
+
+export const deleteRFIAttachment = async (projectId: string, rfiId: string, attachmentId: string): Promise<void> => {
+  await backend.rfis.deleteAttachment({ projectId, rfiId, attachmentId });
 };
 
 export const listAgents_old = async (projectId: string | undefined, params: FilterParams = {}): Promise<PaginatedResponse<API.Agent>> => {

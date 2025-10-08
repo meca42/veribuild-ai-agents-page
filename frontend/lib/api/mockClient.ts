@@ -471,7 +471,7 @@ export const listRFIs = async (projectId: string, params: FilterParams = {}): Pr
     let rfis = db.rfis.filter((r) => r.projectId === projectId);
 
     if (params.q) {
-      rfis = applySearch(rfis, params.q, ['number', 'title', 'question']);
+      rfis = applySearch(rfis, params.q, ['subject', 'question']);
     }
 
     if (params.status) {
@@ -486,10 +486,10 @@ export const listRFIs = async (projectId: string, params: FilterParams = {}): Pr
   });
 };
 
-export const getRFI = async (id: string): Promise<API.RFI> => {
+export const getRFI = async (projectId: string, rfiId: string): Promise<API.RFI> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    const rfi = db.rfis.find((r) => r.id === id);
+    const rfi = db.rfis.find((r) => r.id === rfiId);
     if (!rfi) throw new Error('RFI not found');
     return rfi;
   });
@@ -498,20 +498,20 @@ export const getRFI = async (id: string): Promise<API.RFI> => {
 export const createRFI = async (projectId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    const existingRFIs = db.rfis.filter((r) => r.projectId === projectId);
-    const nextNumber = existingRFIs.length + 1;
     
     const rfi: API.RFI = {
       id: generateId('rfi'),
       projectId,
-      number: data.number || `RFI-${String(nextNumber).padStart(3, '0')}`,
-      title: data.title || 'Untitled RFI',
+      subject: data.subject || 'Untitled RFI',
       question: data.question || '',
       answer: data.answer,
       status: data.status || 'open',
-      askedBy: data.askedBy,
-      assignedTo: data.assignedTo,
+      priority: data.priority || 'normal',
       dueDate: data.dueDate,
+      drawingId: data.drawingId,
+      assignedTo: data.assignedTo,
+      createdBy: data.createdBy,
+      answeredBy: data.answeredBy,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -520,10 +520,10 @@ export const createRFI = async (projectId: string, data: Partial<API.RFI>): Prom
   });
 };
 
-export const updateRFI = async (id: string, data: Partial<API.RFI>): Promise<API.RFI> => {
+export const updateRFI = async (projectId: string, rfiId: string, data: Partial<API.RFI>): Promise<API.RFI> => {
   return simulateLatency(() => {
     const db = getDatabase();
-    const index = db.rfis.findIndex((r) => r.id === id);
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
     if (index === -1) throw new Error('RFI not found');
     
     db.rfis[index] = {
@@ -532,6 +532,80 @@ export const updateRFI = async (id: string, data: Partial<API.RFI>): Promise<API
       updatedAt: new Date(),
     };
     return db.rfis[index];
+  });
+};
+
+export const answerRFI = async (projectId: string, rfiId: string, answer: string): Promise<API.RFI> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
+    if (index === -1) throw new Error('RFI not found');
+    
+    db.rfis[index] = {
+      ...db.rfis[index],
+      answer,
+      status: 'answered',
+      answeredBy: 'system',
+      updatedAt: new Date(),
+    };
+    return db.rfis[index];
+  });
+};
+
+export const closeRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
+    if (index !== -1) {
+      db.rfis[index].status = 'closed';
+      db.rfis[index].updatedAt = new Date();
+    }
+  });
+};
+
+export const reopenRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
+    if (index !== -1) {
+      db.rfis[index].status = 'reopened';
+      db.rfis[index].updatedAt = new Date();
+    }
+  });
+};
+
+export const deleteRFI = async (projectId: string, rfiId: string): Promise<void> => {
+  return simulateLatency(() => {
+    const db = getDatabase();
+    const index = db.rfis.findIndex((r) => r.id === rfiId);
+    if (index !== -1) {
+      db.rfis.splice(index, 1);
+    }
+  });
+};
+
+export const listRFIAttachments = async (projectId: string, rfiId: string): Promise<API.RFIAttachment[]> => {
+  return simulateLatency(() => {
+    return [];
+  });
+};
+
+export const uploadRFIAttachment = async (projectId: string, rfiId: string, file: File): Promise<API.RFIAttachment> => {
+  return simulateLatency(() => {
+    return {
+      id: generateId('att'),
+      rfiId,
+      fileId: generateId('file'),
+      filename: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+      createdAt: new Date(),
+    };
+  });
+};
+
+export const deleteRFIAttachment = async (projectId: string, rfiId: string, attachmentId: string): Promise<void> => {
+  return simulateLatency(() => {
   });
 };
 

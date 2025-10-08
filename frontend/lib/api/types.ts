@@ -4,7 +4,8 @@ export type StepStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'blocked';
 export type FileStatus = 'uploading' | 'ready' | 'archived';
 export type DrawingStatus = 'draft' | 'under_review' | 'approved' | 'superseded';
 export type DocumentStatus = 'draft' | 'under_review' | 'approved' | 'archived';
-export type RFIStatus = 'open' | 'answered' | 'closed';
+export type RFIStatus = 'open' | 'answered' | 'closed' | 'reopened';
+export type RFIPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type SubmittalStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'resubmit';
 export type SubmittalItemStatus = 'pending' | 'approved' | 'rejected' | 'n/a';
 export type IssueType = 'defect' | 'safety' | 'coordination' | 'other';
@@ -143,25 +144,27 @@ export interface Document {
 export interface RFI {
   id: string;
   projectId: string;
-  number: string;
-  title: string;
+  subject: string;
   question: string;
   answer?: string;
   status: RFIStatus;
-  askedBy?: string;
+  priority: string;
+  dueDate?: string;
+  drawingId?: string;
   assignedTo?: string;
-  dueDate?: Date;
+  createdBy?: string;
+  answeredBy?: string;
   createdAt: Date;
   updatedAt: Date;
-  attachments?: RFIAttachment[];
 }
 
 export interface RFIAttachment {
   id: string;
   rfiId: string;
   fileId: string;
-  fileName: string;
-  fileUrl: string;
+  filename: string;
+  contentType?: string;
+  sizeBytes?: number;
   createdAt: Date;
 }
 
