@@ -1,7 +1,9 @@
 import { api, APIError } from "encore.dev/api";
+import { secret } from "encore.dev/config";
 import { createServiceClient } from "../lib/supabase";
-import { executeAgentRun } from "../services/agent-executor/executor";
-import { getAllTools } from "../services/agent-executor/tools";
+import { runAgent } from "../services/agent-executor/executor";
+
+const openaiKey = secret("OpenAIKey");
 
 interface StartRunRequest {
   agentId: string;
@@ -14,13 +16,19 @@ interface StartRunResponse {
 }
 
 export const startRun = api<StartRunRequest, StartRunResponse>(
-  { expose: true, method: "POST", path: "/agents/:agentId/runs" },
+  { expose: true, method: "POST", path: "/agents/:agentId/runs", auth: false },
   async ({ agentId, project_id, input }) => {
+    const userId = 'system';
+    
+    if (!input || !input.trim()) {
+      throw APIError.invalidArgument("input is required");
+    }
+
     const supabase = createServiceClient();
 
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('id, org_id, model, system_prompt, temperature, max_steps')
+      .select('id, org_id')
       .eq('id', agentId)
       .eq('is_active', true)
       .single();
@@ -31,7 +39,7 @@ export const startRun = api<StartRunRequest, StartRunResponse>(
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, org_id')
+      .select('org_id')
       .eq('id', project_id)
       .single();
 
@@ -43,14 +51,12 @@ export const startRun = api<StartRunRequest, StartRunResponse>(
       throw APIError.permissionDenied("Agent and project belong to different organizations");
     }
 
-    const userId = 'system';
-
     const { data: run, error: runError } = await supabase
       .from('agent_runs')
       .insert({
         agent_id: agentId,
         project_id,
-        started_by: userId,
+        created_by: userId,
         trigger: 'ui',
         input,
         status: 'queued'
@@ -62,24 +68,8 @@ export const startRun = api<StartRunRequest, StartRunResponse>(
       throw APIError.internal("Failed to create agent run");
     }
 
-    executeAgentRun({
-      runId: run.id,
-      agentConfig: {
-        id: agent.id,
-        model: agent.model,
-        system_prompt: agent.system_prompt,
-        temperature: agent.temperature,
-        max_steps: agent.max_steps,
-        tools: getAllTools()
-      },
-      input,
-      context: {
-        runId: run.id,
-        projectId: project_id,
-        orgId: agent.org_id,
-        userId
-      }
-    }).catch(error => {
+    const apiKey = openaiKey();
+    runAgent({ runId: run.id, openaiKey: apiKey }).catch((error) => {
       console.error('Agent execution error:', error);
     });
 

@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
-    "encore.dev": "^1.50.4"
+    "encore.dev": "^1.50.4",
+    "openai": "^4.90.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

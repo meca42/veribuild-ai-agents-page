@@ -1,233 +1,271 @@
 import { createServiceClient } from '../../lib/supabase';
-import { AgentConfig, ExecutionContext, RunResult, AgentMessage, ToolCall } from './types';
-import { getTool } from './tools';
+import { getProvider } from '../../lib/llm';
+import { toolSpecsForLlm, runToolByName } from '../../lib/tools';
 
-interface ExecutorOptions {
-  runId: string;
-  agentConfig: AgentConfig;
+type RunRow = {
+  id: string;
+  agent_id: string;
+  project_id: string;
   input: string;
-  context: ExecutionContext;
-}
+  status: string;
+  created_by?: string | null;
+};
 
-export async function executeAgentRun(options: ExecutorOptions): Promise<RunResult> {
-  const { runId, agentConfig, input, context } = options;
-  const supabase = createServiceClient();
+type AgentRow = {
+  id: string;
+  model: string;
+  max_steps?: number | null;
+  system_prompt?: string | null;
+};
 
-  try {
-    await supabase
-      .from('agent_runs')
-      .update({ status: 'running', started_at: new Date().toISOString() })
-      .eq('id', runId);
+const MAX_STEPS_DEFAULT = 6;
+const STEP_TIMEOUT_MS = 30_000;
 
-    let messages: AgentMessage[] = [
-      { role: 'system', content: agentConfig.system_prompt },
-      { role: 'user', content: input }
-    ];
-
-    await saveMessage(runId, 'user', input, 0);
-
-    let stepCount = 0;
-    let finalAnswer = '';
-
-    while (stepCount < agentConfig.max_steps) {
-      const response = await callLLM(agentConfig, messages);
-      
-      if (response.type === 'text') {
-        finalAnswer = response.content;
-        messages.push({ role: 'assistant', content: response.content });
-        await saveMessage(runId, 'assistant', response.content, messages.length - 1);
-        break;
-      }
-
-      if (response.type === 'tool_use') {
-        const toolCallResults: string[] = [];
-
-        for (const toolUse of response.tool_calls) {
-          const tool = getTool(toolUse.name);
-          if (!tool) {
-            throw new Error(`Unknown tool: ${toolUse.name}`);
-          }
-
-          const toolCallStarted = new Date();
-          let toolOutput;
-          let toolStatus: 'ok' | 'error' = 'ok';
-          let toolError: string | undefined;
-
-          try {
-            toolOutput = await tool.execute(toolUse.input, context);
-          } catch (error) {
-            toolStatus = 'error';
-            toolError = error instanceof Error ? error.message : 'Unknown error';
-            toolOutput = { error: toolError };
-          }
-
-          const toolCallFinished = new Date();
-
-          await saveToolCall(runId, {
-            tool_id: tool.id,
-            tool_name: tool.name,
-            input: toolUse.input,
-            output: toolOutput,
-            status: toolStatus,
-            error: toolError,
-            started_at: toolCallStarted,
-            finished_at: toolCallFinished
-          });
-
-          const resultText = JSON.stringify(toolOutput);
-          toolCallResults.push(`Tool ${tool.name}: ${resultText}`);
-          messages.push({
-            role: 'tool',
-            content: resultText,
-            tool_name: tool.name
-          });
-        }
-
-        const assistantMsg = `[Used tools: ${response.tool_calls.map(t => t.name).join(', ')}]`;
-        messages.push({ role: 'assistant', content: assistantMsg });
-        await saveMessage(runId, 'assistant', assistantMsg, messages.length - 1);
-
-        stepCount++;
-
-        const shouldStop = await checkStopCondition(runId);
-        if (shouldStop) {
-          finalAnswer = 'Run was cancelled by user';
-          break;
-        }
-      }
-    }
-
-    if (stepCount >= agentConfig.max_steps && !finalAnswer) {
-      finalAnswer = 'Maximum steps reached without final answer';
-    }
-
-    await supabase
-      .from('agent_runs')
-      .update({
-        status: 'succeeded',
-        finished_at: new Date().toISOString(),
-        result_summary: finalAnswer
-      })
-      .eq('id', runId);
-
-    return {
-      success: true,
-      result_summary: finalAnswer
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    await supabase
-      .from('agent_runs')
-      .update({
-        status: 'failed',
-        finished_at: new Date().toISOString(),
-        error: errorMessage
-      })
-      .eq('id', runId);
-
-    return {
-      success: false,
-      error: errorMessage
-    };
-  }
-}
-
-async function callLLM(
-  config: AgentConfig,
-  messages: AgentMessage[]
-): Promise<{ type: 'text'; content: string } | { type: 'tool_use'; tool_calls: Array<{ name: string; input: any }> }> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: messages.map(m => ({
-        role: m.role === 'tool' ? 'function' : m.role,
-        content: m.content,
-        name: m.tool_name
-      })),
-      temperature: config.temperature,
-      tools: config.tools.map(t => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.input_schema
-        }
-      })),
-      tool_choice: 'auto'
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`LLM API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const choice = (data as any).choices[0];
-
-  if (choice.message.tool_calls) {
-    return {
-      type: 'tool_use',
-      tool_calls: choice.message.tool_calls.map((tc: any) => ({
-        name: tc.function.name,
-        input: JSON.parse(tc.function.arguments)
-      }))
-    };
-  }
-
-  return {
-    type: 'text',
-    content: choice.message.content || ''
-  };
-}
-
-async function saveMessage(runId: string, role: string, content: string, seq: number): Promise<void> {
-  const supabase = createServiceClient();
-  await supabase.from('agent_messages').insert({
-    run_id: runId,
-    role,
-    content,
-    seq
-  });
-}
-
-async function saveToolCall(runId: string, toolCall: ToolCall): Promise<void> {
+async function appendMessage(
+  runId: string,
+  role: 'user' | 'assistant' | 'tool' | 'system',
+  content: string,
+  toolName?: string
+) {
   const supabase = createServiceClient();
   
-  const { data: existingCalls } = await supabase
-    .from('tool_calls')
+  const { data } = await supabase
+    .from('agent_messages')
     .select('seq')
     .eq('run_id', runId)
     .order('seq', { ascending: false })
     .limit(1);
 
-  const nextSeq = existingCalls && existingCalls.length > 0 ? existingCalls[0].seq + 1 : 0;
+  const nextSeq = (data && data.length > 0 ? data[0].seq : 0) + 1;
 
-  await supabase.from('tool_calls').insert({
+  await supabase.from('agent_messages').insert({
     run_id: runId,
-    tool_id: toolCall.tool_id,
+    role,
+    content,
+    tool_name: toolName || null,
     seq: nextSeq,
-    input: toolCall.input,
-    output: toolCall.output,
-    status: toolCall.status,
-    error: toolCall.error,
-    started_at: toolCall.started_at.toISOString(),
-    finished_at: toolCall.finished_at?.toISOString()
   });
 }
 
-async function checkStopCondition(runId: string): Promise<boolean> {
+async function logTool(
+  runId: string,
+  seq: number,
+  toolName: string,
+  input: any,
+  res: any,
+  startedAt: Date,
+  error?: string
+) {
   const supabase = createServiceClient();
-  const { data } = await supabase
-    .from('agent_runs')
-    .select('status')
-    .eq('id', runId)
-    .single();
+  await supabase.from('tool_calls').insert({
+    run_id: runId,
+    seq,
+    tool_name: toolName,
+    input: JSON.stringify(input),
+    output: error ? null : JSON.stringify(res),
+    error: error || null,
+    started_at: startedAt.toISOString(),
+    finished_at: new Date().toISOString(),
+    status: error ? 'error' : 'ok',
+  });
+}
 
-  return data?.status === 'cancelled';
+async function updateRun(runId: string, patch: Record<string, any>) {
+  const supabase = createServiceClient();
+  await supabase.from('agent_runs').update(patch).eq('id', runId);
+}
+
+export async function runAgent({
+  runId,
+  openaiKey,
+}: {
+  runId: string;
+  openaiKey: string;
+}) {
+  await updateRun(runId, {
+    status: 'running',
+    started_at: new Date().toISOString(),
+  });
+
+  const supabase = createServiceClient();
+
+  const { data: run, error: runError } = await supabase
+    .from('agent_runs')
+    .select('id, agent_id, project_id, input, status, created_by')
+    .eq('id', runId)
+    .single<RunRow>();
+
+  if (runError || !run) {
+    await updateRun(runId, {
+      status: 'failed',
+      error: runError?.message || 'run not found',
+      finished_at: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const { data: agent, error: agentError } = await supabase
+    .from('agents')
+    .select('id, model, max_steps, system_prompt')
+    .eq('id', run.agent_id)
+    .single<AgentRow>();
+
+  if (agentError || !agent) {
+    await updateRun(runId, {
+      status: 'failed',
+      error: agentError?.message || 'agent not found',
+      finished_at: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (!openaiKey) {
+    await updateRun(runId, {
+      status: 'failed',
+      error: 'OpenAI API key not configured',
+      finished_at: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const provider = getProvider(openaiKey);
+  const model = agent.model || 'gpt-4o-mini';
+  const maxSteps = agent.max_steps ?? MAX_STEPS_DEFAULT;
+
+  if (agent.system_prompt) {
+    await appendMessage(runId, 'system', agent.system_prompt);
+  }
+  await appendMessage(runId, 'user', run.input);
+
+  let step = 0;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let costUSD = 0;
+
+  try {
+    while (step < maxSteps) {
+      const { data: messages } = await supabase
+        .from('agent_messages')
+        .select('role, content, tool_name')
+        .eq('run_id', runId)
+        .order('seq', { ascending: true });
+
+      if (!messages) {
+        throw new Error('Failed to fetch messages');
+      }
+
+      const llmRes = await Promise.race([
+        provider.chat({
+          model,
+          messages: messages.map((m) => ({
+            role: m.role as any,
+            content: m.content,
+            name: m.tool_name ?? undefined,
+          })),
+          tools: toolSpecsForLlm(),
+          tool_choice: 'auto',
+          temperature: 0.2,
+          max_tokens: 800,
+        }),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error('step_timeout')), STEP_TIMEOUT_MS)
+        ),
+      ]);
+
+      if (llmRes.usage) {
+        promptTokens += llmRes.usage.prompt_tokens ?? 0;
+        completionTokens += llmRes.usage.completion_tokens ?? 0;
+        costUSD += llmRes.usage.cost_usd ?? 0;
+      }
+
+      if ((llmRes.toolCalls?.length ?? 0) === 0) {
+        if (llmRes.content?.trim()) {
+          await appendMessage(runId, 'assistant', llmRes.content.trim());
+          await updateRun(runId, {
+            status: 'succeeded',
+            finished_at: new Date().toISOString(),
+            result_summary: llmRes.content.slice(0, 500),
+            usage_prompt_tokens: promptTokens,
+            usage_completion_tokens: completionTokens,
+            usage_total_tokens: promptTokens + completionTokens,
+            usage_cost_usd: Number(costUSD.toFixed(6)),
+          });
+          return;
+        }
+        await updateRun(runId, {
+          status: 'failed',
+          error: 'empty_response',
+          finished_at: new Date().toISOString(),
+        });
+        return;
+      }
+
+      for (const tc of llmRes.toolCalls!) {
+        const started = new Date();
+        try {
+          const args = JSON.parse(tc.arguments || '{}');
+          const toolRes = await runToolByName(tc.name as any, args, {
+            runId,
+            projectId: run.project_id,
+            userId: run.created_by ?? 'system',
+          });
+
+          await logTool(
+            runId,
+            step + 1,
+            tc.name,
+            args,
+            toolRes.ok ? toolRes.result : null,
+            started,
+            toolRes.ok ? undefined : toolRes.error
+          );
+
+          await appendMessage(
+            runId,
+            'tool',
+            JSON.stringify(toolRes.ok ? toolRes.result : { error: toolRes.error }),
+            tc.name
+          );
+        } catch (err: any) {
+          await logTool(runId, step + 1, tc.name, {}, null, started, err?.message ?? 'tool_error');
+          await appendMessage(
+            runId,
+            'tool',
+            JSON.stringify({ error: err?.message ?? 'tool_error' }),
+            tc.name
+          );
+        }
+      }
+
+      step += 1;
+
+      const { data: fresh } = await supabase
+        .from('agent_runs')
+        .select('status')
+        .eq('id', runId)
+        .single();
+
+      if (fresh?.status === 'cancelled') return;
+    }
+
+    await updateRun(runId, {
+      status: 'failed',
+      error: 'max_steps_exceeded',
+      finished_at: new Date().toISOString(),
+      usage_prompt_tokens: promptTokens,
+      usage_completion_tokens: completionTokens,
+      usage_total_tokens: promptTokens + completionTokens,
+      usage_cost_usd: Number(costUSD.toFixed(6)),
+    });
+  } catch (err: any) {
+    await updateRun(runId, {
+      status: 'failed',
+      error: err?.message ?? 'executor_error',
+      finished_at: new Date().toISOString(),
+      usage_prompt_tokens: promptTokens,
+      usage_completion_tokens: completionTokens,
+      usage_total_tokens: promptTokens + completionTokens,
+      usage_cost_usd: Number(costUSD.toFixed(6)),
+    });
+  }
 }

@@ -46,8 +46,9 @@ interface GetRunResponse {
 }
 
 export const getRun = api<GetRunRequest, GetRunResponse>(
-  { expose: true, method: "GET", path: "/runs/:runId" },
+  { expose: true, method: "GET", path: "/runs/:runId", auth: false },
   async ({ runId }) => {
+
     const supabase = createServiceClient();
 
     const { data: run, error: runError } = await supabase

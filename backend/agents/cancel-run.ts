@@ -10,8 +10,9 @@ interface CancelRunResponse {
 }
 
 export const cancelRun = api<CancelRunRequest, CancelRunResponse>(
-  { expose: true, method: "POST", path: "/runs/:runId/cancel" },
+  { expose: true, method: "POST", path: "/runs/:runId/cancel", auth: false },
   async ({ runId }) => {
+
     const supabase = createServiceClient();
 
     const { data: run, error: runError } = await supabase
@@ -34,7 +35,8 @@ export const cancelRun = api<CancelRunRequest, CancelRunResponse>(
         status: 'cancelled',
         finished_at: new Date().toISOString()
       })
-      .eq('id', runId);
+      .eq('id', runId)
+      .in('status', ['queued', 'running']);
 
     if (updateError) {
       throw APIError.internal("Failed to cancel run");
