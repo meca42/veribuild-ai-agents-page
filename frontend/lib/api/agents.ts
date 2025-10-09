@@ -49,6 +49,18 @@ export async function startRun(agentId: string, projectId: string, input: string
   return await backend.agents.startRun({ agentId, project_id: projectId, input });
 }
 
+export async function listProjectRuns(projectId: string) {
+  if (!projectId) return [];
+  
+  try {
+    const result = await backend.agents.listProjectRuns({ projectId, limit: 10 });
+    return result.items ?? [];
+  } catch (err) {
+    console.warn('listProjectRuns error:', err);
+    return [];
+  }
+}
+
 export async function getRun(runId: string): Promise<GetRunResponse> {
   const result = await backend.agents.getRun({ runId });
   return {

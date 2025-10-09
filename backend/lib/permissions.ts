@@ -29,7 +29,11 @@ export async function verifyProjectAccess(userId: string, projectId: string): Pr
     throw APIError.notFound("Project not found");
   }
 
-  await verifyOrgMembership(userId, project.org_id);
+  try {
+    await verifyOrgMembership(userId, project.org_id);
+  } catch (e) {
+    throw APIError.permissionDenied("User does not have access to this project");
+  }
   
   return project.org_id;
 }

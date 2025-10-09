@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import backend from '~backend/client';
+import { listProjectRuns } from '@/lib/api/agents';
 import { Badge } from '@/components/ui/Badge';
 
 interface AgentRunItem {
@@ -14,24 +14,28 @@ interface AgentRunItem {
 }
 
 interface RecentRunsProps {
-  projectId: string;
+  projectId?: string;
 }
 
 export function RecentRuns({ projectId }: RecentRunsProps) {
   const [runs, setRuns] = useState<AgentRunItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!projectId) {
+      setRuns([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchRuns = async () => {
       try {
         setLoading(true);
-        const response = await backend.agents.listProjectRuns({ projectId, limit: 10 });
-        setRuns(response.items);
-        setError(null);
+        const items = await listProjectRuns(projectId);
+        setRuns(items);
       } catch (err) {
-        console.error('Failed to fetch recent runs:', err);
-        setError('Failed to load runs');
+        console.warn('Failed to fetch recent runs:', err);
+        setRuns([]);
       } finally {
         setLoading(false);
       }
@@ -39,6 +43,10 @@ export function RecentRuns({ projectId }: RecentRunsProps) {
 
     fetchRuns();
   }, [projectId]);
+
+  if (!projectId) {
+    return null;
+  }
 
   return (
     <div className="border rounded-lg bg-background">
@@ -53,7 +61,6 @@ export function RecentRuns({ projectId }: RecentRunsProps) {
       </div>
       <div className="p-6">
         {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
-        {error && <div className="text-sm text-red-600">{error}</div>}
         <div className="space-y-3">
           {runs.map((r) => (
             <a 
